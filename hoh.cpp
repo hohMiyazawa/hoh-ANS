@@ -294,7 +294,7 @@ uint16_t paeth(uint16_t A,uint16_t B,uint16_t C){
 	}
 }
 
-uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height){
+uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint32_t predictors){
 	uint8_t forige = 128;
 	int best_pred[width];
 	for(int i=0;i<width;i++){
@@ -344,7 +344,7 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height){
 		best_pred[i % width] = 0;
 		for(int j=1;j<15;j++){
 			int val = std::abs(data[i] - predictions[j]);
-			if(val < best_val){
+			if(val < best_val && (predictors & (1 << j))){
 				best_val = val;
 				best_pred[i % width] = j;
 			}
@@ -357,7 +357,7 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height){
 	return out_buf;
 }
 
-uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int depth){
+uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int depth, uint32_t predictors){
 	int centre = 1<<(depth - 1);
 
 	uint16_t forige = 256;
@@ -409,7 +409,7 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 		best_pred[i % width] = 0;
 		for(int j=1;j<15;j++){
 			int val = std::abs(data[i] - predictions[j]);
-			if(val < best_val){
+			if(val < best_val && (predictors & (1 << j))){
 				best_val = val;
 				best_pred[i % width] = j;
 			}
@@ -440,11 +440,16 @@ int main(int argc, char *argv[]){
 		print_usage();
 		return 2;
 	}
+	int cruncher_mode = 0;
+	if(argc > 4 && strcpy(argv[4],"crunch")){
+		cruncher_mode = 1;
+		printf("cruncher mode activated\n");
+	}
 
 	size_t in_size;
 	uint8_t* in_bytes = read_file(argv[1], &in_size);
 
-	static const uint32_t prob_bits = 18;
+	static const uint32_t prob_bits = 16;
 	static const uint32_t prob_scale = 1 << prob_bits;
 
 	/*static size_t out_max_size = 32<<20; // 32MB
@@ -576,49 +581,226 @@ int main(int argc, char *argv[]){
 	uint16_t* BLUE_G = new uint16_t[split_size];
 	subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
-	uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height);
-	uint32_t* pred_buf_1;
-	uint32_t* pred_end_1;
-	uint32_t* pred_rans_begin_1;
-	int green_channel_size = channel_encode(
-		predict_1,
-		split_size,
-		9,
-		prob_bits,
-		pred_buf_1,
-		pred_end_1,
-		pred_rans_begin_1
-	);
-	rgb_size += green_channel_size;
-	subtract_green_size += green_channel_size;
+	if(cruncher_mode){
+		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
+		uint32_t* pred_buf_1;
+		uint32_t* pred_end_1;
+		uint32_t* pred_rans_begin_1;
+		int green_channel_size = channel_encode(
+			predict_1,
+			split_size,
+			9,
+			prob_bits,
+			pred_buf_1,
+			pred_end_1,
+			pred_rans_begin_1
+		);
+		uint32_t green_mask = 0xFFFF;
+		int best_found = -1;
+		for(int i=1;i<16;i++){
+			predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF ^ (1 << i));
+			int temp_size = channel_encode(
+				predict_1,
+				split_size,
+				9,
+				prob_bits,
+				pred_buf_1,
+				pred_end_1,
+				pred_rans_begin_1
+			);
+			if(temp_size < green_channel_size){
+				green_channel_size = temp_size;
+				green_mask = 0xFFFF ^ (1 << i);
+				best_found = i;
+			}
+		}
+		if(best_found != -1){
+			for(int i=1;i<16;i++){
+				if(best_found == i){
+					continue;
+				}
+				predict_1 = channelpredict(GREEN, split_size, width, height, green_mask ^ (1 << i));
+				int temp_size = channel_encode(
+					predict_1,
+					split_size,
+					9,
+					prob_bits,
+					pred_buf_1,
+					pred_end_1,
+					pred_rans_begin_1
+				);
+				if(temp_size < green_channel_size){
+					green_channel_size = temp_size;
+					green_mask = green_mask ^ (1 << i);
+					best_found = i;
+				}
+			}
+		}
+		for(uint32_t i=prob_bits;i < 20;i++){
+			predict_1 = channelpredict(GREEN, split_size, width, height, green_mask);
+			int temp_size = channel_encode(
+				predict_1,
+				split_size,
+				9,
+				i,
+				pred_buf_1,
+				pred_end_1,
+				pred_rans_begin_1
+			);
+			if(temp_size < green_channel_size){
+				green_channel_size = temp_size;
+			}
+			else{
+				break;
+			}
+		}
+		subtract_green_size += green_channel_size;
 
-	uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height,10);
-	uint32_t* pred_buf_1_sub;
-	uint32_t* pred_end_1_sub;
-	uint32_t* pred_rans_begin_1_sub;
-	subtract_green_size += channel_encode(
-		predict_1_sub,
-		split_size,
-		10,
-		prob_bits,
-		pred_buf_1_sub,
-		pred_end_1_sub,
-		pred_rans_begin_1_sub
-	);
+		uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF);
+		uint32_t* pred_buf_1_sub;
+		uint32_t* pred_end_1_sub;
+		uint32_t* pred_rans_begin_1_sub;
+		int sub_red_channel_size = channel_encode(
+			predict_1_sub,
+			split_size,
+			10,
+			prob_bits,
+			pred_buf_1_sub,
+			pred_end_1_sub,
+			pred_rans_begin_1_sub
+		);
+		uint32_t sub_red_mask = 0xFFFF;
+		for(int i=1;i<16;i++){
+			predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF ^ (1 << i));
+			int temp_size = channel_encode(
+				predict_1_sub,
+				split_size,
+				10,
+				prob_bits,
+				pred_buf_1_sub,
+				pred_end_1_sub,
+				pred_rans_begin_1_sub
+			);
+			if(temp_size < sub_red_channel_size){
+				sub_red_channel_size = temp_size;
+				sub_red_mask = 0xFFFF ^ (1 << i);
+			}
+		}
+		for(uint32_t i=prob_bits;i < 20;i++){
+			predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, sub_red_mask);
+			int temp_size = channel_encode(
+				predict_1_sub,
+				split_size,
+				10,
+				i,
+				pred_buf_1_sub,
+				pred_end_1_sub,
+				pred_rans_begin_1_sub
+			);
+			if(temp_size < sub_red_channel_size){
+				sub_red_channel_size = temp_size;
+			}
+			else{
+				break;
+			}
+		}
+		subtract_green_size += sub_red_channel_size;
 
-	uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height,10);
-	uint32_t* pred_buf_2_sub;
-	uint32_t* pred_end_2_sub;
-	uint32_t* pred_rans_begin_2_sub;
-	subtract_green_size += channel_encode(
-		predict_2_sub,
-		split_size,
-		10,
-		prob_bits,
-		pred_buf_2_sub,
-		pred_end_2_sub,
-		pred_rans_begin_2_sub
-	);
+		uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF);
+		uint32_t* pred_buf_2_sub;
+		uint32_t* pred_end_2_sub;
+		uint32_t* pred_rans_begin_2_sub;
+		int sub_blue_channel_size = channel_encode(
+			predict_2_sub,
+			split_size,
+			10,
+			prob_bits,
+			pred_buf_2_sub,
+			pred_end_2_sub,
+			pred_rans_begin_2_sub
+		);
+		uint32_t sub_blue_mask = 0xFFFF;
+		for(int i=1;i<16;i++){
+			predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF ^ (1 << i));
+			int temp_size = channel_encode(
+				predict_2_sub,
+				split_size,
+				10,
+				prob_bits,
+				pred_buf_2_sub,
+				pred_end_2_sub,
+				pred_rans_begin_2_sub
+			);
+			if(temp_size < sub_blue_channel_size){
+				sub_blue_channel_size = temp_size;
+				sub_blue_mask = 0xFFFF ^ (1 << i);
+			}
+		}
+		for(uint32_t i=prob_bits;i < 20;i++){
+			predict_1_sub = channelpredict(BLUE_G, split_size, width, height, 10, sub_blue_mask);
+			int temp_size = channel_encode(
+				predict_1_sub,
+				split_size,
+				10,
+				i,
+				pred_buf_1_sub,
+				pred_end_1_sub,
+				pred_rans_begin_1_sub
+			);
+			if(temp_size < sub_blue_channel_size){
+				sub_blue_channel_size = temp_size;
+			}
+			else{
+				break;
+			}
+		}
+		subtract_green_size += sub_blue_channel_size;
+	}
+	else{
+		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
+		uint32_t* pred_buf_1;
+		uint32_t* pred_end_1;
+		uint32_t* pred_rans_begin_1;
+		int green_channel_size = channel_encode(
+			predict_1,
+			split_size,
+			9,
+			prob_bits,
+			pred_buf_1,
+			pred_end_1,
+			pred_rans_begin_1
+		);
+		rgb_size += green_channel_size;
+		subtract_green_size += green_channel_size;
+
+		uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF);
+		uint32_t* pred_buf_1_sub;
+		uint32_t* pred_end_1_sub;
+		uint32_t* pred_rans_begin_1_sub;
+		subtract_green_size += channel_encode(
+			predict_1_sub,
+			split_size,
+			10,
+			prob_bits,
+			pred_buf_1_sub,
+			pred_end_1_sub,
+			pred_rans_begin_1_sub
+		);
+
+		uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF);
+		uint32_t* pred_buf_2_sub;
+		uint32_t* pred_end_2_sub;
+		uint32_t* pred_rans_begin_2_sub;
+		subtract_green_size += channel_encode(
+			predict_2_sub,
+			split_size,
+			10,
+			prob_bits,
+			pred_buf_2_sub,
+			pred_end_2_sub,
+			pred_rans_begin_2_sub
+		);
+	}
 
 	/*printf("YIQ transform\n");
 	uint8_t*  Y = new uint8_t[split_size];
