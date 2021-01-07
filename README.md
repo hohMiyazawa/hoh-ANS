@@ -10,7 +10,6 @@ hoh infile.raw width height
 "infile.raw" must consist of raw 8bit RGB bytes.
 You can make such a file with imagemagick:
 ```
-```
 convert input.png -depth 8 rgb:infile.raw
 ```
 Encoded size is reported, but no data is written.
