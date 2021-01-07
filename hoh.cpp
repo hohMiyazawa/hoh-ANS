@@ -581,6 +581,8 @@ int main(int argc, char *argv[]){
 	uint16_t* BLUE_G = new uint16_t[split_size];
 	subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
+	palette_compact(GREEN,split_size);//costs 32 bytes, but who's counting?
+
 	if(cruncher_mode){
 		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_1;

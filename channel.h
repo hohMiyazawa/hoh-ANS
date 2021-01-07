@@ -39,4 +39,25 @@ static void rgb_to_yiq(uint8_t* source, size_t size, uint8_t* Y, uint16_t* I, ui
 	}
 }
 
+static void palette_compact(uint8_t* source, size_t size){//costs 32 bytes, but who's counting?
+	int histogram[256];
+	for(int i=0;i<256;i++){
+		histogram[i] = 0;
+	}
+	for (size_t i=0; i < size; i++) {
+		histogram[source[i]]++;
+	}
+	int moving_table[256];
+	int diff = 0;
+	for(int i=0;i<256;i++){
+		moving_table[i] = diff;
+		if(histogram[i] == 0){
+			diff++;
+		}
+	}
+	for (size_t i=0; i < size; i++) {
+		source[i] = source[i] - moving_table[source[i]];
+	}
+}
+
 #endif // CHANNEL_HEADER
