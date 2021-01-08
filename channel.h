@@ -39,7 +39,7 @@ static void rgb_to_yiq(uint8_t* source, size_t size, uint8_t* Y, uint16_t* I, ui
 	}
 }
 
-static void palette_compact(uint8_t* source, size_t size){//costs 32 bytes, but who's counting?
+static void palette_compact(uint8_t* source, size_t size){
 	int histogram[256];
 	for(int i=0;i<256;i++){
 		histogram[i] = 0;

@@ -13,6 +13,7 @@
 #include "file_io.h"
 #include "symbolstats.h"
 #include "channel.h"
+#include "patches.h"
 
 int ranscode_symbols_256(
 	uint8_t* symbols,
@@ -86,7 +87,7 @@ int ranscode_symbols_512(
 	rans_begin = ptr;
 
 	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	printf("rANS: %d bytes\n", bytes);
+	//printf("rANS: %d bytes\n", bytes);
 	return bytes;
 }
 
@@ -124,7 +125,7 @@ int ranscode_symbols_1024(
 	rans_begin = ptr;
 
 	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	printf("rANS: %d bytes\n", bytes);
+	//printf("rANS: %d bytes\n", bytes);
 	return bytes;
 }
 
@@ -443,7 +444,7 @@ int main(int argc, char *argv[]){
 	int cruncher_mode = 0;
 	if(argc > 4 && strcpy(argv[4],"crunch")){
 		cruncher_mode = 1;
-		printf("cruncher mode activated\n");
+		//printf("cruncher mode activated\n");
 	}
 
 	size_t in_size;
@@ -584,6 +585,12 @@ int main(int argc, char *argv[]){
 	palette_compact(GREEN,split_size);//costs 32 bytes, but who's counting?
 
 	if(cruncher_mode){
+
+		int patch_bytes = 0;
+		patch_bytes += detect_patches(GREEN, split_size, width, height) * 12;
+		patch_bytes += detect_patches(RED_G, split_size, width, height) * 12;
+		patch_bytes += detect_patches(BLUE_G, split_size, width, height) * 12;
+
 		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_1;
 		uint32_t* pred_end_1;
@@ -706,7 +713,6 @@ int main(int argc, char *argv[]){
 				break;
 			}
 		}
-		subtract_green_size += sub_red_channel_size;
 
 		uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF);
 		uint32_t* pred_buf_2_sub;
@@ -756,7 +762,57 @@ int main(int argc, char *argv[]){
 				break;
 			}
 		}
+
+//experimental
+		size_t channel_0_size;
+		uint8_t* channel_0 = channel_picker(in_bytes, in_size, 3, 0, &channel_0_size);
+
+		int pure_red_size = detect_patches(channel_0, channel_0_size, width, height) * 12;
+
+		uint16_t* predict_0 = channelpredict(channel_0, channel_0_size, width, height, 0xFFFF);
+		uint32_t* pred_buf_0;
+		uint32_t* pred_end_0;
+		uint32_t* pred_rans_begin_0;
+
+		pure_red_size += channel_encode(
+			predict_0,
+			channel_0_size,
+			9,
+			prob_bits,
+			pred_buf_0,
+			pred_end_0,
+			pred_rans_begin_0
+		);
+		if(pure_red_size < sub_red_channel_size){
+			sub_red_channel_size = pure_red_size;
+		}
+
+		size_t channel_2_size;
+		uint8_t* channel_2 = channel_picker(in_bytes, in_size, 3, 2, &channel_2_size);
+
+		int pure_blue_size = detect_patches(channel_2, channel_2_size, width, height) * 12;
+
+		uint16_t* predict_2 = channelpredict(channel_2, channel_2_size, width, height, 0xFFFF);
+		uint32_t* pred_buf_2;
+		uint32_t* pred_end_2;
+		uint32_t* pred_rans_begin_2;
+		pure_blue_size += channel_encode(
+			predict_2,
+			channel_2_size,
+			9,
+			prob_bits,
+			pred_buf_2,
+			pred_end_2,
+			pred_rans_begin_2
+		);
+		if(pure_blue_size < sub_blue_channel_size){
+			sub_blue_channel_size = pure_blue_size;
+		}
+
+		subtract_green_size += sub_red_channel_size;
 		subtract_green_size += sub_blue_channel_size;
+
+		subtract_green_size += patch_bytes;
 	}
 	else{
 		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
@@ -855,6 +911,7 @@ int main(int argc, char *argv[]){
 	//printf("S_G: %d\n",subtract_green_size);
 	//printf("YIQ: %d\n",yiq_size);
 
+	//printf("%d\n",subtract_green_size + 8 + 8 + 2 + 3);
 	printf("Total file size: %d bytes\n",subtract_green_size + 8 + 8 + 2 + 3);
 	//data size + channel offsets + width/height + transforms + identifier
 
