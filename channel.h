@@ -16,13 +16,35 @@ static uint8_t* channel_picker(uint8_t* source, size_t size, int total_channels,
 		for (size_t i=0; i < *out_size; i++) {
 			buf[i] = source[i*total_channels + target];
 		}
-		return buf;//wrong, a placeholder
+		return buf;
 	}
 }
 
-static void subtract_green(uint8_t* source, size_t size, uint8_t* GREEN, uint16_t* RED_G, uint16_t* BLUE_G){
+int grey_test(uint8_t* source, size_t size){
+	for (size_t i=0; i < size; i += 3) {
+		if(
+			source[i] != source[i + 1]
+			|| source[i] != source[i + 2]
+		){
+			return 0;
+		}
+	}
+	return 1;
+}
+
+static uint16_t* channel_picker(uint8_t* source, size_t size, int total_channels, int target){
+	assert(total_channels >= target + 1);
+	assert(size % total_channels == 0);
+	uint16_t* buf = new uint16_t[size/total_channels];
+	for (size_t i=0; i < size/total_channels; i++) {
+		buf[i] = source[i*total_channels + target];
+	}
+	return buf;
+}
+
+static void subtract_green(uint8_t* source, size_t size, uint16_t* GREEN, uint16_t* RED_G, uint16_t* BLUE_G){
 	for (size_t i=0; i < size/3; i++) {
-		GREEN[i]  = source[i*3 + 1];
+		GREEN[i]  = (uint16_t)source[i*3 + 1];
 		RED_G[i]  = (uint16_t)((int)source[i*3 + 0] - (int)source[i*3 + 1] + 256);
 		BLUE_G[i] = (uint16_t)((int)source[i*3 + 2] - (int)source[i*3 + 1] + 256);
 	}
