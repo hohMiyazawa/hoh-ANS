@@ -452,6 +452,57 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 	return out_buf;
 }
 
+int palette_encode(uint8_t* in_bytes, size_t in_size,uint32_t prob_bits, int width, int height){
+	uint8_t red[256];
+	uint8_t green[256];
+	uint8_t blue[256];
+	int palette_index = 0;
+
+	uint8_t* INDEXED = new uint8_t[in_size/3];
+
+	for(int i=0;i<in_size;i += 3){
+		int found = 0;
+		for(int j=0;j<palette_index;j++){
+			if(
+				red[j] == in_bytes[i]
+				&& green[j] == in_bytes[i + 1]
+				&& blue[j] == in_bytes[i + 2]
+			){
+				INDEXED[i/3] = j;
+				found = 1;
+				break;
+			}
+		}
+		if(found == 0){
+			red[palette_index] = in_bytes[i];
+			green[palette_index] = in_bytes[i + 1];
+			blue[palette_index] = in_bytes[i + 2];
+			INDEXED[i/3] = palette_index;
+			palette_index++;
+			if(palette_index == 257){
+				delete[] INDEXED;
+				return -1;
+			}
+		}
+	}
+
+	uint16_t* predict_1 = channelpredict(INDEXED, in_size/3, width, height, 0xFFFF);
+	uint32_t* pred_buf_1;
+	uint32_t* pred_end_1;
+	uint32_t* pred_rans_begin_1;
+	int encoded_size = channel_encode(
+		predict_1,
+		in_size/3,
+		9,
+		prob_bits,
+		pred_buf_1,
+		pred_end_1,
+		pred_rans_begin_1
+	);
+	delete[] INDEXED;
+	return encoded_size + palette_index*3;
+}
+
 void print_usage(){
 	printf("usage: hoh infile.raw width height\n\n");
 	printf("The input file must consist of raw 8bit RGB bytes\n");
@@ -640,6 +691,7 @@ int main(int argc, char *argv[]){
 
 		size_t LEMPEL_SIZE;
 		uint8_t* LEMPEL = new uint8_t[split_size];
+		//uint16_t* LEMPEL = new uint16_t[split_size];
 		uint8_t* LEMPEL_NUKE = new uint8_t[split_size];
 		for(int i=0;i<split_size;i++){
 			LEMPEL_NUKE[i] = 0;
@@ -664,6 +716,17 @@ int main(int argc, char *argv[]){
 			dummy2,
 			dummy3
 		);
+
+		/*int green_lz_transform = channel_encode(
+			LEMPEL,
+			LEMPEL_SIZE,
+			9,
+			14,
+			dummy1,
+			dummy2,
+			dummy3
+		);*/
+
 		uint16_t* predict_1_cleaned = new uint16_t[split_size];
 		size_t cleaned_pointer = 0;
 		for(int i=0;i<split_size;i++){
@@ -1020,6 +1083,14 @@ int main(int argc, char *argv[]){
 
 		subtract_green_size += sub_red_channel_size;
 		subtract_green_size += sub_blue_channel_size;
+
+		int indexed_size = palette_encode(in_bytes, in_size, prob_bits, width, height);
+		if(
+			indexed_size != -1
+			&& indexed_size < subtract_green_size
+		){
+			subtract_green_size = indexed_size;
+		}
 
 		//subtract_green_size += patch_bytes;
 	}
