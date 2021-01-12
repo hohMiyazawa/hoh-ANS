@@ -180,7 +180,7 @@ int channel_encode(
 	uint32_t* out_end,
 	uint32_t* rans_begin
 ){
-	static const uint32_t prob_scale = 1 << prob_bits;
+	uint32_t prob_scale = 1 << prob_bits;
 	SymbolStats_256 stats;
 	stats.count_freqs(symbols, symbol_size);
 	stats.normalize_freqs(prob_scale);
@@ -213,7 +213,7 @@ int channel_encode(
 	uint32_t* out_end,
 	uint32_t* rans_begin
 ){
-	static const uint32_t prob_scale = 1 << prob_bits;
+	uint32_t prob_scale = 1 << prob_bits;
 	if(depth == 9){
 		SymbolStats_512 stats;
 		stats.count_freqs(symbols, symbol_size);
@@ -465,7 +465,7 @@ int layer_encode(
 	uint32_t prob_bits = 15;
 
 	size_t LEMPEL_SIZE;
-	uint8_t* LEMPEL = new uint8_t[size];
+	uint16_t* LEMPEL = new uint16_t[size];
 	uint8_t* LEMPEL_NUKE = new uint8_t[size];
 	for(int i=0;i<size;i++){
 		LEMPEL_NUKE[i] = 0;
@@ -504,14 +504,27 @@ int layer_encode(
 		}
 	}
 
-	int lz_overhead = channel_encode(
+	/*int lz_overhead = channel_encode(
 		LEMPEL,
 		LEMPEL_SIZE,
 		10,
 		dummy1,
 		dummy2,
 		dummy3
+	);*/
+
+	int lz_overhead = channel_encode(
+		LEMPEL,
+		LEMPEL_SIZE,
+		10,
+		11,
+		dummy1,
+		dummy2,
+		dummy3
 	);
+	if(lz_overhead > (LEMPEL_SIZE+1)*10/8){
+		lz_overhead = (LEMPEL_SIZE+1)*10/8;
+	}
 
 	int channel_size_lz = channel_encode(
 		predict_cleaned,
@@ -650,15 +663,15 @@ int layer_encode(
 				}
 			}
 		}
-		for(uint32_t i=prob_bits;i < 20;i++){
-			predict = channelpredict(data, size, width, height, depth, mask);
+		predict = channelpredict(data, size, width, height, depth, mask);
+		cleaned_pointer = 0;
+		for(int j=0;j<size;j++){
+			if(LEMPEL_NUKE[j] == 0){
+				predict_cleaned[cleaned_pointer++] = predict[j];
+			}
+		}
+		for(uint32_t i=12;i < 20;i++){
 			if(lz_used){
-				cleaned_pointer = 0;
-				for(int j=0;j<size;j++){
-					if(LEMPEL_NUKE[j] == 0){
-						predict_cleaned[cleaned_pointer++] = predict[j];
-					}
-				}
 				temp_size = channel_encode(
 					predict_cleaned,
 					cleaned_pointer,
@@ -682,9 +695,6 @@ int layer_encode(
 			}
 			if(temp_size < possible_size){
 				possible_size = temp_size;
-			}
-			else{
-				break;
 			}
 		}
 	}
