@@ -304,7 +304,7 @@ int detect_patches(uint8_t* source, size_t size, int width, int height){
 		}
 	}
 
-	printf("32x32 patches found: %d\n",count);
+	//printf("32x32 patches found: %d\n",count);
 
 	min_size = 16;
 
@@ -386,8 +386,8 @@ int detect_patches(uint8_t* source, size_t size, int width, int height){
 		}
 	}
 
-	printf("16x16 patches found: %d\n",count2);
-	printf("nuked pixels: %d\n",nuke_count);
+	//printf("16x16 patches found: %d\n",count2);
+	//printf("nuked pixels: %d\n",nuke_count);
 
 
 	delete[] nuked;
@@ -491,7 +491,7 @@ int detect_patches(uint16_t* source, size_t size, int width, int height){
 			}
 		}
 	}
-	printf("32x32 patches found: %d\n",count);
+	//printf("32x32 patches found: %d\n",count);
 
 	min_size = 16;
 
@@ -572,7 +572,7 @@ int detect_patches(uint16_t* source, size_t size, int width, int height){
 		}
 	}
 
-	printf("16x16 patches found: %d\n",count2);
+	//printf("16x16 patches found: %d\n",count2);
 
 	delete[] nuked;
 

@@ -14,6 +14,7 @@
 #include "symbolstats.h"
 #include "channel.h"
 #include "patches.h"
+#include "lz.h"
 
 int ranscode_symbols_256(
 	uint8_t* symbols,
@@ -49,7 +50,7 @@ int ranscode_symbols_256(
 	rans_begin = ptr;
 
 	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	printf("rANS: %d bytes\n", bytes);
+	//printf("rANS: %d bytes\n", bytes);
 	return bytes;
 }
 
@@ -169,6 +170,38 @@ int table_code(uint32_t* data, uint32_t prob_bits, uint32_t range_bits){
 		}
 	}
 	return (bits + (bits % 8))/8;
+}
+
+int channel_encode(
+	uint8_t* symbols,
+	size_t symbol_size,
+	uint32_t prob_bits,
+	uint32_t* out_buf,
+	uint32_t* out_end,
+	uint32_t* rans_begin
+){
+	static const uint32_t prob_scale = 1 << prob_bits;
+	SymbolStats_256 stats;
+	stats.count_freqs(symbols, symbol_size);
+	stats.normalize_freqs(prob_scale);
+
+	uint32_t* table_data = new uint32_t[256];
+	for(int i=0;i<256;i++){
+		table_data[i] = stats.freqs[i];
+	}
+	int size = table_code(table_data, prob_bits, 8);
+
+	delete[] table_data;
+
+	return 1 + size + ranscode_symbols_256(
+		symbols,
+		symbol_size,
+		stats,
+		prob_bits,
+		out_buf,
+		out_end,
+		rans_begin
+	);
 }
 
 int channel_encode(
@@ -586,10 +619,10 @@ int main(int argc, char *argv[]){
 
 	if(cruncher_mode){
 
-		int patch_bytes = 0;
+		/*int patch_bytes = 0;
 		patch_bytes += detect_patches(GREEN, split_size, width, height) * 12;
 		patch_bytes += detect_patches(RED_G, split_size, width, height) * 12;
-		patch_bytes += detect_patches(BLUE_G, split_size, width, height) * 12;
+		patch_bytes += detect_patches(BLUE_G, split_size, width, height) * 12;*/
 
 		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_1;
@@ -604,6 +637,57 @@ int main(int argc, char *argv[]){
 			pred_end_1,
 			pred_rans_begin_1
 		);
+
+		size_t LEMPEL_SIZE;
+		uint8_t* LEMPEL = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE[i] = 0;
+		}
+
+		find_lz(
+			GREEN,
+			split_size,
+			LEMPEL,
+			&LEMPEL_SIZE,
+			LEMPEL_NUKE
+		);
+		uint32_t* dummy1;
+		uint32_t* dummy2;
+		uint32_t* dummy3;
+
+		int green_lz_transform = channel_encode(
+			LEMPEL,
+			LEMPEL_SIZE,
+			10,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+		uint16_t* predict_1_cleaned = new uint16_t[split_size];
+		size_t cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE[i] == 0){
+				predict_1_cleaned[cleaned_pointer++] = predict_1[i];
+			}
+		}
+
+		int green_channel_size_lz = channel_encode(
+			predict_1_cleaned,
+			cleaned_pointer,
+			9,
+			prob_bits,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+
+		//printf("green pure cost: %d\n",green_channel_size);
+		//printf("green lz cost: %d\n",green_lz_transform + green_channel_size_lz);
+
+		delete[] predict_1_cleaned;
+
+
 		uint32_t green_mask = 0xFFFF;
 		int best_found = -1;
 		for(int i=1;i<16;i++){
@@ -624,6 +708,7 @@ int main(int argc, char *argv[]){
 			}
 		}
 		if(best_found != -1){
+			int best_found2 = -1;
 			for(int i=1;i<16;i++){
 				if(best_found == i){
 					continue;
@@ -641,7 +726,28 @@ int main(int argc, char *argv[]){
 				if(temp_size < green_channel_size){
 					green_channel_size = temp_size;
 					green_mask = green_mask ^ (1 << i);
-					best_found = i;
+					best_found2 = i;
+				}
+			}
+			if(best_found2 != -1){
+				for(int i=1;i<16;i++){
+					if(best_found == i || best_found2 == i){
+						continue;
+					}
+					predict_1 = channelpredict(GREEN, split_size, width, height, green_mask ^ (1 << i));
+					int temp_size = channel_encode(
+						predict_1,
+						split_size,
+						9,
+						prob_bits,
+						pred_buf_1,
+						pred_end_1,
+						pred_rans_begin_1
+					);
+					if(temp_size < green_channel_size){
+						green_channel_size = temp_size;
+						green_mask = green_mask ^ (1 << i);
+					}
 				}
 			}
 		}
@@ -663,7 +769,13 @@ int main(int argc, char *argv[]){
 				break;
 			}
 		}
-		subtract_green_size += green_channel_size;
+
+		if(green_lz_transform + green_channel_size_lz < green_channel_size){
+			subtract_green_size += green_lz_transform + green_channel_size_lz;
+		}
+		else{
+			subtract_green_size += green_channel_size;
+		}
 
 		uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF);
 		uint32_t* pred_buf_1_sub;
@@ -678,6 +790,50 @@ int main(int argc, char *argv[]){
 			pred_end_1_sub,
 			pred_rans_begin_1_sub
 		);
+
+		size_t LEMPEL_SIZE_RED;
+		uint8_t* LEMPEL_RED = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE_RED = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE_RED[i] = 0;
+		}
+
+		find_lz(
+			RED_G,
+			split_size,
+			LEMPEL_RED,
+			&LEMPEL_SIZE_RED,
+			LEMPEL_NUKE_RED
+		);
+
+		int red_lz_transform = channel_encode(
+			LEMPEL_RED,
+			LEMPEL_SIZE_RED,
+			10,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+		uint16_t* predict_1_sub_cleaned = new uint16_t[split_size];
+		cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE_RED[i] == 0){
+				predict_1_sub_cleaned[cleaned_pointer++] = predict_1_sub[i];
+			}
+		}
+
+		int red_channel_size_lz = channel_encode(
+			predict_1_sub_cleaned,
+			cleaned_pointer,
+			10,
+			prob_bits,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+
+		delete[] predict_1_sub_cleaned;
+
 		uint32_t sub_red_mask = 0xFFFF;
 		for(int i=1;i<16;i++){
 			predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF ^ (1 << i));
@@ -727,6 +883,50 @@ int main(int argc, char *argv[]){
 			pred_end_2_sub,
 			pred_rans_begin_2_sub
 		);
+
+		size_t LEMPEL_SIZE_BLUE;
+		uint8_t* LEMPEL_BLUE = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE_BLUE = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE_BLUE[i] = 0;
+		}
+
+		find_lz(
+			BLUE_G,
+			split_size,
+			LEMPEL_BLUE,
+			&LEMPEL_SIZE_BLUE,
+			LEMPEL_NUKE_BLUE
+		);
+
+		int blue_lz_transform = channel_encode(
+			LEMPEL_BLUE,
+			LEMPEL_SIZE_BLUE,
+			10,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+		uint16_t* predict_2_sub_cleaned = new uint16_t[split_size];
+		cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE_BLUE[i] == 0){
+				predict_2_sub_cleaned[cleaned_pointer++] = predict_2_sub[i];
+			}
+		}
+
+		int blue_channel_size_lz = channel_encode(
+			predict_2_sub_cleaned,
+			cleaned_pointer,
+			10,
+			prob_bits,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+
+		delete[] predict_2_sub_cleaned;
+
 		uint32_t sub_blue_mask = 0xFFFF;
 		for(int i=1;i<16;i++){
 			predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF ^ (1 << i));
@@ -767,7 +967,7 @@ int main(int argc, char *argv[]){
 		size_t channel_0_size;
 		uint8_t* channel_0 = channel_picker(in_bytes, in_size, 3, 0, &channel_0_size);
 
-		int pure_red_size = detect_patches(channel_0, channel_0_size, width, height) * 12;
+		int pure_red_size = 0;//detect_patches(channel_0, channel_0_size, width, height) * 12;
 
 		uint16_t* predict_0 = channelpredict(channel_0, channel_0_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_0;
@@ -790,7 +990,7 @@ int main(int argc, char *argv[]){
 		size_t channel_2_size;
 		uint8_t* channel_2 = channel_picker(in_bytes, in_size, 3, 2, &channel_2_size);
 
-		int pure_blue_size = detect_patches(channel_2, channel_2_size, width, height) * 12;
+		int pure_blue_size = 0;//detect_patches(channel_2, channel_2_size, width, height) * 12;
 
 		uint16_t* predict_2 = channelpredict(channel_2, channel_2_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_2;
@@ -809,12 +1009,100 @@ int main(int argc, char *argv[]){
 			sub_blue_channel_size = pure_blue_size;
 		}
 
+		if(red_lz_transform + red_channel_size_lz < sub_red_channel_size){
+			//printf("red %d %d %d\n",sub_red_channel_size,red_lz_transform,red_channel_size_lz);
+			sub_red_channel_size = red_lz_transform + red_channel_size_lz;
+		}
+
+		if(blue_lz_transform + blue_channel_size_lz < sub_blue_channel_size){
+			sub_blue_channel_size = blue_lz_transform + blue_channel_size_lz;
+		}
+
 		subtract_green_size += sub_red_channel_size;
 		subtract_green_size += sub_blue_channel_size;
 
-		subtract_green_size += patch_bytes;
+		//subtract_green_size += patch_bytes;
 	}
 	else{
+		size_t LEMPEL_SIZE;
+		uint8_t* LEMPEL = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE[i] = 0;
+		}
+
+		find_lz(
+			GREEN,
+			split_size,
+			LEMPEL,
+			&LEMPEL_SIZE,
+			LEMPEL_NUKE
+		);
+
+		size_t LEMPEL_SIZE_RED;
+		uint8_t* LEMPEL_RED = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE_RED = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE_RED[i] = 0;
+		}
+
+		find_lz(
+			RED_G,
+			split_size,
+			LEMPEL_RED,
+			&LEMPEL_SIZE_RED,
+			LEMPEL_NUKE_RED
+		);
+
+		size_t LEMPEL_SIZE_BLUE;
+		uint8_t* LEMPEL_BLUE = new uint8_t[split_size];
+		uint8_t* LEMPEL_NUKE_BLUE = new uint8_t[split_size];
+		for(int i=0;i<split_size;i++){
+			LEMPEL_NUKE_BLUE[i] = 0;
+		}
+
+		find_lz(
+			BLUE_G,
+			split_size,
+			LEMPEL_BLUE,
+			&LEMPEL_SIZE_BLUE,
+			LEMPEL_NUKE_BLUE
+		);
+
+		uint32_t* out_buf;
+		uint32_t* out_end;
+		uint32_t* rans_begin;
+
+		int lempel1 = channel_encode(
+			LEMPEL,
+			LEMPEL_SIZE,
+			10,
+			out_buf,
+			out_end,
+			rans_begin
+		);
+		int lempel2 = channel_encode(
+			LEMPEL_RED,
+			LEMPEL_SIZE_RED,
+			10,
+			out_buf,
+			out_end,
+			rans_begin
+		);
+		int lempel3 = channel_encode(
+			LEMPEL_BLUE,
+			LEMPEL_SIZE_BLUE,
+			10,
+			out_buf,
+			out_end,
+			rans_begin
+		);
+
+		printf("lempel %d %d %d\n",lempel1,lempel2,lempel3);
+
+//old predict
+/*
+
 		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
 		uint32_t* pred_buf_1;
 		uint32_t* pred_end_1;
@@ -830,7 +1118,38 @@ int main(int argc, char *argv[]){
 		);
 		rgb_size += green_channel_size;
 		subtract_green_size += green_channel_size;
+*/
+//end old predict
 
+//new predict
+
+		uint16_t* predict_1 = channelpredict(GREEN, split_size, width, height, 0xFFFF);
+		uint16_t* predict_1_cleaned = new uint16_t[split_size];
+		size_t cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE[i] == 0){
+				predict_1_cleaned[cleaned_pointer++] = predict_1[i];
+			}
+		}
+
+		uint32_t* pred_buf_1;
+		uint32_t* pred_end_1;
+		uint32_t* pred_rans_begin_1;
+		int green_channel_size = channel_encode(
+			predict_1_cleaned,
+			cleaned_pointer,
+			9,
+			prob_bits,
+			pred_buf_1,
+			pred_end_1,
+			pred_rans_begin_1
+		);
+		rgb_size += green_channel_size;
+		subtract_green_size += green_channel_size;
+
+//end new predict
+
+/*
 		uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF);
 		uint32_t* pred_buf_1_sub;
 		uint32_t* pred_end_1_sub;
@@ -844,7 +1163,31 @@ int main(int argc, char *argv[]){
 			pred_end_1_sub,
 			pred_rans_begin_1_sub
 		);
+*/
+//
+		uint16_t* predict_1_sub = channelpredict(RED_G, split_size, width, height, 10, 0xFFFF);
+		uint16_t* predict_1_sub_cleaned = new uint16_t[split_size];
+		cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE_RED[i] == 0){
+				predict_1_sub_cleaned[cleaned_pointer++] = predict_1_sub[i];
+			}
+		}
 
+		uint32_t* pred_buf_1_sub;
+		uint32_t* pred_end_1_sub;
+		uint32_t* pred_rans_begin_1_sub;
+		subtract_green_size += channel_encode(
+			predict_1_sub_cleaned,
+			cleaned_pointer,
+			10,
+			prob_bits,
+			pred_buf_1_sub,
+			pred_end_1_sub,
+			pred_rans_begin_1_sub
+		);
+//
+/*
 		uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF);
 		uint32_t* pred_buf_2_sub;
 		uint32_t* pred_end_2_sub;
@@ -858,6 +1201,40 @@ int main(int argc, char *argv[]){
 			pred_end_2_sub,
 			pred_rans_begin_2_sub
 		);
+*/
+
+		uint16_t* predict_2_sub = channelpredict(BLUE_G, split_size, width, height, 10, 0xFFFF);
+
+		uint16_t* predict_2_sub_cleaned = new uint16_t[split_size];
+		cleaned_pointer = 0;
+		for(int i=0;i<split_size;i++){
+			if(LEMPEL_NUKE_BLUE[i] == 0){
+				predict_2_sub_cleaned[cleaned_pointer++] = predict_2_sub[i];
+			}
+		}
+
+		uint32_t* pred_buf_2_sub;
+		uint32_t* pred_end_2_sub;
+		uint32_t* pred_rans_begin_2_sub;
+		subtract_green_size += channel_encode(
+			predict_2_sub_cleaned,
+			cleaned_pointer,
+			10,
+			prob_bits,
+			pred_buf_2_sub,
+			pred_end_2_sub,
+			pred_rans_begin_2_sub
+		);
+
+		delete[] LEMPEL;
+		delete[] LEMPEL_NUKE;
+		delete[] LEMPEL_RED;
+		delete[] LEMPEL_NUKE_RED;
+		delete[] LEMPEL_BLUE;
+		delete[] LEMPEL_NUKE_BLUE;
+		delete[] predict_1_cleaned;
+		delete[] predict_1_sub_cleaned;
+		delete[] predict_2_sub_cleaned;
 	}
 
 	/*printf("YIQ transform\n");
