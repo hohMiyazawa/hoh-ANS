@@ -15,267 +15,60 @@
 #include "channel.h"
 #include "patches.h"
 #include "lz.h"
-
-int ranscode_symbols_256(
-	uint8_t* symbols,
-	size_t symbol_size,
-	SymbolStats_256 stats,
-	uint32_t prob_bits,
-	uint32_t* out_buf,
-	uint32_t* out_end,
-	uint32_t* rans_begin
-){
-	static const uint32_t prob_scale = 1 << prob_bits;
-
-	static size_t out_max_size = 32<<20; // 32MB
-	static size_t out_max_elems = out_max_size / sizeof(uint32_t);
-	out_buf = new uint32_t[out_max_elems];
-	out_end = out_buf + out_max_elems;
-
-	Rans64EncSymbol esyms[256];
-
-	for (int i=0; i < 256; i++) {
-		Rans64EncSymbolInit(&esyms[i], stats.cum_freqs[i], stats.freqs[i], prob_bits);
-	}
-
-	Rans64State rans;
-	Rans64EncInit(&rans);
-
-	uint32_t* ptr = out_end; // *end* of output buffer
-	for (size_t i=symbol_size; i > 0; i--) { // NB: working in reverse!
-		int s = symbols[i-1];
-		Rans64EncPutSymbol(&rans, &ptr, &esyms[s], prob_bits);
-	}
-	Rans64EncFlush(&rans, &ptr);
-	rans_begin = ptr;
-
-	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	//printf("rANS: %d bytes\n", bytes);
-	return bytes;
-}
-
-int ranscode_symbols_512(
-	uint16_t* symbols,
-	size_t symbol_size,
-	SymbolStats_512 stats,
-	uint32_t prob_bits,
-	uint32_t* out_buf,
-	uint32_t* out_end,
-	uint32_t* rans_begin
-){
-	static const uint32_t prob_scale = 1 << prob_bits;
-
-	static size_t out_max_size = 32<<20; // 32MB
-	static size_t out_max_elems = out_max_size / sizeof(uint32_t);
-	out_buf = new uint32_t[out_max_elems];
-	out_end = out_buf + out_max_elems;
-
-	Rans64EncSymbol esyms[512];
-
-	for (int i=0; i < 512; i++) {
-		Rans64EncSymbolInit(&esyms[i], stats.cum_freqs[i], stats.freqs[i], prob_bits);
-	}
-
-	Rans64State rans;
-	Rans64EncInit(&rans);
-
-	uint32_t* ptr = out_end; // *end* of output buffer
-	for (size_t i=symbol_size; i > 0; i--) { // NB: working in reverse!
-		int s = symbols[i-1];
-		Rans64EncPutSymbol(&rans, &ptr, &esyms[s], prob_bits);
-	}
-	Rans64EncFlush(&rans, &ptr);
-	rans_begin = ptr;
-
-	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	//printf("rANS: %d bytes\n", bytes);
-	return bytes;
-}
-
-int ranscode_symbols_1024(
-	uint16_t* symbols,
-	size_t symbol_size,
-	SymbolStats_1024 stats,
-	uint32_t prob_bits,
-	uint32_t* out_buf,
-	uint32_t* out_end,
-	uint32_t* rans_begin
-){
-	static const uint32_t prob_scale = 1 << prob_bits;
-
-	static size_t out_max_size = 32<<20; // 32MB
-	static size_t out_max_elems = out_max_size / sizeof(uint32_t);
-	out_buf = new uint32_t[out_max_elems];
-	out_end = out_buf + out_max_elems;
-
-	Rans64EncSymbol esyms[1024];
-
-	for (int i=0; i < 1024; i++) {
-		Rans64EncSymbolInit(&esyms[i], stats.cum_freqs[i], stats.freqs[i], prob_bits);
-	}
-
-	Rans64State rans;
-	Rans64EncInit(&rans);
-
-	uint32_t* ptr = out_end; // *end* of output buffer
-	for (size_t i=symbol_size; i > 0; i--) { // NB: working in reverse!
-		int s = symbols[i-1];
-		Rans64EncPutSymbol(&rans, &ptr, &esyms[s], prob_bits);
-	}
-	Rans64EncFlush(&rans, &ptr);
-	rans_begin = ptr;
-
-	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
-	//printf("rANS: %d bytes\n", bytes);
-	return bytes;
-}
-
-int table_code(uint32_t* data, uint32_t prob_bits, uint32_t range_bits){
-	uint32_t range = 1<<range_bits;
-	int bits = 0;
-	bits += ((prob_bits + (prob_bits % 4))/4 + 1)*2*(range_bits - 1);
-	int i = 0;
-	int size_bits = 0;
-	for(int i=0;i<(range/2);i++){
-		if(size_bits == 0 && data[i] != 0){
-			size_bits = 1;
-			bits++;
-		}
-		else if(size_bits == 1 && data[1] > 1){
-			size_bits = 4;
-			bits += 4;
-		}
-		else{
-			while(data[i] > (1<<size_bits) - 1){
-				size_bits += 4;
-			}
-			bits += size_bits;
-		}
-	}
-	size_bits = 0;
-	for(int i=range-1;i >= range/2;i--){
-		if(size_bits == 0 && data[i] != 0){
-			size_bits = 1;
-			bits++;
-		}
-		else if(size_bits == 1 && data[1] > 1){
-			size_bits = 4;
-			bits += 4;
-		}
-		else{
-			while(data[i] > (1<<size_bits) - 1){
-				size_bits += 4;
-			}
-			bits += size_bits;
-		}
-	}
-	return (bits + (bits % 8))/8;
-}
-
-int channel_encode(
-	uint8_t* symbols,
-	size_t symbol_size,
-	uint32_t prob_bits,
-	uint32_t* out_buf,
-	uint32_t* out_end,
-	uint32_t* rans_begin
-){
-	uint32_t prob_scale = 1 << prob_bits;
-	SymbolStats_256 stats;
-	stats.count_freqs(symbols, symbol_size);
-	stats.normalize_freqs(prob_scale);
-
-	uint32_t* table_data = new uint32_t[256];
-	for(int i=0;i<256;i++){
-		table_data[i] = stats.freqs[i];
-	}
-	int size = table_code(table_data, prob_bits, 8);
-
-	delete[] table_data;
-
-	return 1 + size + ranscode_symbols_256(
-		symbols,
-		symbol_size,
-		stats,
-		prob_bits,
-		out_buf,
-		out_end,
-		rans_begin
-	);
-}
-
-int channel_encode(
-	uint16_t* symbols,
-	size_t symbol_size,
-	int depth,
-	uint32_t prob_bits,
-	uint32_t* out_buf,
-	uint32_t* out_end,
-	uint32_t* rans_begin
-){
-	uint32_t prob_scale = 1 << prob_bits;
-	if(depth == 9){
-		SymbolStats_512 stats;
-		stats.count_freqs(symbols, symbol_size);
-		stats.normalize_freqs(prob_scale);
-
-		/*float deviation = stats.deviation();
-		printf("std_dev: %.6f\n",deviation);
-		SymbolStats_512 supplemental_stats;
-		supplemental_stats.laplace(deviation,prob_scale);
-		supplemental_stats.normalize_freqs(prob_scale);*/
-
-		uint32_t* table_data = new uint32_t[512];
-		for(int i=0;i<512;i++){
-			table_data[i] = stats.freqs[i];
-			//printf("%d %d\n",i,(int)(stats.freqs[i]) - (int)(supplemental_stats.freqs[i]));
-			//printf("%d %d\n",i,(int)(stats.freqs[i]));
-		}
-		//printf("table size: %d\n",table_code(table_data, prob_bits, 9));
-		int size = table_code(table_data, prob_bits, 9);
-
-		delete[] table_data;
-
-		return 1 + size + ranscode_symbols_512(
-			symbols,
-			symbol_size,
-			stats,
-			prob_bits,
-			out_buf,
-			out_end,
-			rans_begin
-		);
-	}
-	else if(depth == 10){
-		SymbolStats_1024 stats;
-		stats.count_freqs(symbols, symbol_size);
-		stats.normalize_freqs(prob_scale);
-
-		uint32_t* table_data = new uint32_t[1024];
-		for(int i=0;i<1024;i++){
-			table_data[i] = stats.freqs[i];
-			//printf("%d %d\n",i,(int)(stats.freqs[i]) - (int)(supplemental_stats.freqs[i]));
-			//printf("%d %d\n",i,(int)(stats.freqs[i]));
-		}
-		//printf("table size: %d\n",table_code(table_data, prob_bits, 10));
-		int size = table_code(table_data, prob_bits, 10);
-
-		delete[] table_data;
-
-		return 1 + size + ranscode_symbols_1024(
-			symbols,
-			symbol_size,
-			stats,
-			prob_bits,
-			out_buf,
-			out_end,
-			rans_begin
-		);
-	}
-}
+#include "channel_encode.h"
 
 uint8_t midpoint(uint8_t a, uint8_t b){
 	return a + (b - a) / 2;
+}
+
+uint8_t median(uint8_t a, uint8_t b, uint8_t c){
+	if(a > b){
+		if(b > c){
+			return b;
+		}
+		else if(c > a){
+			return a;
+		}
+		else{
+			return c;
+		}
+	}
+	else{
+		if(b < c){
+			return b;
+		}
+		else if(c > a){
+			return c;
+		}
+		else{
+			return a;
+		}
+	}
+}
+
+uint16_t median(uint16_t a, uint16_t b, uint16_t c){
+	if(a > b){
+		if(b > c){
+			return b;
+		}
+		else if(c > a){
+			return a;
+		}
+		else{
+			return c;
+		}
+	}
+	else{
+		if(b < c){
+			return b;
+		}
+		else if(c > a){
+			return c;
+		}
+		else{
+			return a;
+		}
+	}
 }
 
 uint16_t midpoint(uint16_t a, uint16_t b){
@@ -344,11 +137,12 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint
 		uint8_t T = top_row[i % width];
 		uint8_t TL = top_row[(i + width - 1) % width];
 		uint8_t TR = top_row[(i + width + 1) % width];
-		uint8_t predictions[15] = {
+		uint8_t predictions[16] = {
 			L,
 			T,
 			TL,
 			TR,
+			median(T,L,T+L-TL),
 			midpoint(L,T),
 			midpoint(L,TL),
 			midpoint(TL,T),
@@ -374,9 +168,9 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint
 		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + 256;
 		forige = data[i];
 		top_row[i % width] = data[i];
-		int best_val = std::abs(data[i] - predictions[0]);
+		int best_val = 512;
 		best_pred[i % width] = 0;
-		for(int j=1;j<15;j++){
+		for(int j=0;j<16;j++){
 			int val = std::abs(data[i] - predictions[j]);
 			if(val < best_val && (predictors & (1 << j))){
 				best_val = val;
@@ -394,14 +188,14 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint
 uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int depth, uint32_t predictors){
 	int centre = 1<<depth;
 
-	uint16_t forige = centre;
+	uint16_t forige = centre/2;
 	int best_pred[width];
 	for(int i=0;i<width;i++){
 		best_pred[i] = 0;
 	}
 	uint16_t top_row[width];
 	for(int i=0;i<width;i++){
-		top_row[i] = centre;
+		top_row[i] = centre/2;
 	}
 	uint16_t* out_buf = new uint16_t[size];
 	for (int i=0; i < size; i++){
@@ -409,11 +203,12 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 		uint16_t T = top_row[i % width];
 		uint16_t TL = top_row[(i + width - 1) % width];
 		uint16_t TR = top_row[(i + width + 1) % width];
-		uint16_t predictions[15] = {
+		uint16_t predictions[16] = {
 			L,
 			T,
 			TL,
 			TR,
+			median(T,L,T+L-TL),
 			midpoint(L,T),
 			midpoint(L,TL),
 			midpoint(TL,T),
@@ -435,13 +230,13 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 			(L + TL + T + TR)/4,
 			((L + TR)/2 + T)/2*/
 		};
-		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + 256;
+		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + centre;
 		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + centre;
 		forige = data[i];
 		top_row[i % width] = data[i];
-		int best_val = std::abs(data[i] - predictions[0]);
+		int best_val = centre*2;
 		best_pred[i % width] = 0;
-		for(int j=1;j<15;j++){
+		for(int j=0;j<16;j++){
 			int val = std::abs(data[i] - predictions[j]);
 			if(val < best_val && (predictors & (1 << j))){
 				best_val = val;
@@ -471,7 +266,7 @@ int layer_encode(
 		LEMPEL_NUKE[i] = 0;
 	}
 
-	find_lz(
+	int lz_overhead = find_lz(
 		data,
 		size,
 		LEMPEL,
@@ -505,14 +300,14 @@ int layer_encode(
 		}
 	}
 
-	int lz_overhead = channel_encode(
+	/*int lz_overhead = channel_encode(
 		LEMPEL,
 		LEMPEL_SIZE,
 		10,
 		dummy1,
 		dummy2,
 		dummy3
-	);
+	);*/
 
 	/*int lz_overhead = channel_encode(
 		LEMPEL,
@@ -523,9 +318,10 @@ int layer_encode(
 		dummy2,
 		dummy3
 	);*/
-	if(lz_overhead > (LEMPEL_SIZE+1)*10/8){
+	/*if(lz_overhead > (LEMPEL_SIZE+1)*10/8){
 		lz_overhead = (LEMPEL_SIZE+1)*10/8;
-	}
+	}*/
+	//printf("lempel %d\n",lz_overhead);
 
 	int channel_size_lz = channel_encode(
 		predict_cleaned,
