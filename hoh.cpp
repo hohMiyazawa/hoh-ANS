@@ -16,6 +16,7 @@
 #include "patches.h"
 #include "lz.h"
 #include "channel_encode.h"
+#include "bitimage.h"
 
 uint8_t midpoint(uint8_t a, uint8_t b){
 	return a + (b - a) / 2;
@@ -123,6 +124,7 @@ uint16_t paeth(uint16_t A,uint16_t B,uint16_t C){
 
 uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint32_t predictors){
 	uint8_t forige = 128;
+	uint8_t forige_TL = 128;
 	int best_pred[width];
 	for(int i=0;i<width;i++){
 		best_pred[i] = 0;
@@ -135,7 +137,7 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint
 	for (int i=0; i < size; i++){
 		uint8_t L = forige;
 		uint8_t T = top_row[i % width];
-		uint8_t TL = top_row[(i + width - 1) % width];
+		uint8_t TL = forige_TL;
 		uint8_t TR = top_row[(i + width + 1) % width];
 		uint8_t predictions[16] = {
 			L,
@@ -167,6 +169,7 @@ uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint
 		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + 256;
 		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + 256;
 		forige = data[i];
+		forige_TL = top_row[i % width];
 		top_row[i % width] = data[i];
 		int best_val = 512;
 		best_pred[i % width] = 0;
@@ -189,6 +192,7 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 	int centre = 1<<depth;
 
 	uint16_t forige = centre/2;
+	uint16_t forige_TL = centre/2;
 	int best_pred[width];
 	for(int i=0;i<width;i++){
 		best_pred[i] = 0;
@@ -201,7 +205,7 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 	for (int i=0; i < size; i++){
 		uint16_t L = forige;
 		uint16_t T = top_row[i % width];
-		uint16_t TL = top_row[(i + width - 1) % width];
+		uint16_t TL = forige_TL;
 		uint16_t TR = top_row[(i + width + 1) % width];
 		uint16_t predictions[16] = {
 			L,
@@ -233,6 +237,7 @@ uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int
 		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + centre;
 		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + centre;
 		forige = data[i];
+		forige_TL = top_row[i % width];
 		top_row[i % width] = data[i];
 		int best_val = centre*2;
 		best_pred[i % width] = 0;
@@ -288,9 +293,11 @@ int layer_encode(
 		dummy2,
 		dummy3
 	);
+	//printf("0xFFFF %d\n",channel_size);
 	if(channel_size < possible_size){
 		possible_size = channel_size;
 	}
+
 
 	uint16_t* predict_cleaned = new uint16_t[size];
 	size_t cleaned_pointer = 0;
@@ -338,10 +345,173 @@ int layer_encode(
 		lz_used = 1;
 	}
 
+	/*predict = channelpredict(data, size, width, height, depth, 0b0000000000000001);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("bx0000000000000001 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000000010);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000000010 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000000100);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000000100 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000001000);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000001000 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000010000);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000010000 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000000011);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000000011 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b0000000000010001);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b0000000000010001 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}
+	predict = channelpredict(data, size, width, height, depth, 0b1111111111111111);
+	channel_size = channel_encode(
+		predict,
+		size,
+		depth + 1,
+		prob_bits,
+		dummy1,
+		dummy2,
+		dummy3
+	);
+	printf("0b1111111111111111 %d\n",channel_size);
+	if(channel_size < possible_size){
+		possible_size = channel_size;
+	}*/
+
 	if(cruncher_mode){
-		uint32_t mask = 0xFFFF;
-		int best_found = -1;
+		uint32_t mask = 0b0000000000010000;
 		int temp_size;
+
+		uint32_t masks[11] = {
+			0b0000000000000001,
+			0b1111111110111111,//good
+			0b0000000000000011,
+			0b1111111111111101,
+			0b1111111111111011,
+			0b1111111111110111,
+			0b1111111111101111,
+			0b1111111111011111,
+			0b1111111101111111,
+			0b1111110111111111,
+
+			0b1111111111111111
+		};
+		for(int i=0;i<11;i++){
+			predict = channelpredict(data, size, width, height, depth, masks[i]);
+			if(lz_used){
+				cleaned_pointer = 0;
+				for(int j=0;j<size;j++){
+					if(LEMPEL_NUKE[j] == 0){
+						predict_cleaned[cleaned_pointer++] = predict[j];
+					}
+				}
+				temp_size = channel_encode(
+					predict_cleaned,
+					cleaned_pointer,
+					depth + 1,
+					prob_bits,
+					dummy1,
+					dummy2,
+					dummy3
+				) + lz_overhead;
+			}
+			else{
+				temp_size = channel_encode(
+					predict,
+					size,
+					depth + 1,
+					prob_bits,
+					dummy1,
+					dummy2,
+					dummy3
+				);
+			}
+			if(temp_size < possible_size){
+				possible_size = temp_size;
+				mask = masks[i];
+			}
+		}
+		/*int best_found = -1;
 		for(int i=1;i<16;i++){
 			predict = channelpredict(data, size, width, height, depth, 0xFFFF ^ (1 << i));
 			if(lz_used){
@@ -459,7 +629,8 @@ int layer_encode(
 					}
 				}
 			}
-		}
+		}*/
+		//printf("maskend %d\n",(int)mask);
 		predict = channelpredict(data, size, width, height, depth, mask);
 		cleaned_pointer = 0;
 		for(int j=0;j<size;j++){
@@ -598,6 +769,21 @@ int main(int argc, char *argv[]){
 			cruncher_mode
 		);
 		delete[] GREY;
+
+		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
+		if(binary_test(binary, in_size/3)){
+			binarize(binary, in_size/3);
+
+			int bit_size = bitimage_encode(
+				binary,
+				in_size/3,
+				width,
+				height
+			);
+			if(bit_size < best_size){
+				best_size = bit_size;
+			}
+		}
 	}
 	else{
 

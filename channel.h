@@ -3,17 +3,15 @@
 
 #include <assert.h>
 
-static uint8_t* channel_picker(uint8_t* source, size_t size, int total_channels, int target, size_t* out_size){
+static uint8_t* channel_picker8(uint8_t* source, size_t size, int total_channels, int target){
 	assert(total_channels >= target + 1);
 	assert(size % total_channels == 0);
 	if(total_channels == 1){
-		*out_size = size;
 		return source;
 	}
 	else{
-		*out_size = size/total_channels;
 		uint8_t* buf = new uint8_t[size/total_channels];
-		for (size_t i=0; i < *out_size; i++) {
+		for (size_t i=0; i < size/total_channels; i++) {
 			buf[i] = source[i*total_channels + target];
 		}
 		return buf;
@@ -30,6 +28,36 @@ int grey_test(uint8_t* source, size_t size){
 		}
 	}
 	return 1;
+}
+
+int binary_test(uint8_t* source, size_t size){
+	int col1 = source[0];
+	int col2 = source[0];
+	for (size_t i=0; i < size; i++) {
+		if(
+			source[i] != col1
+		){
+			if(col1 == col2){
+				col2 = source[i];
+			}
+			else if(source[i] != col2){
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+void binarize(uint8_t* source, size_t size){
+	uint8_t col1 = source[0];
+	for (size_t i=0; i < size; i++) {
+		if(source[i] == col1){
+			source[i] = 0;
+		}
+		else{
+			source[i] = 1;
+		}
+	}
 }
 
 static uint16_t* channel_picker(uint8_t* source, size_t size, int total_channels, int target){
