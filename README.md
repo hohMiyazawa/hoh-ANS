@@ -5,8 +5,9 @@ Proof of concept, useless for most edge cases.
 ## Usage
 
 ```
-hoh infile.raw width height
+hoh infile.raw width height -sN
 ```
+Where "N" is a number 0-4 (fast-slow).
 "infile.raw" must consist of raw 8bit RGB bytes.
 You can make such a file with imagemagick:
 ```
