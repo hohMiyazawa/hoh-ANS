@@ -465,7 +465,7 @@ int layer_encode(
 	uint32_t prob_bits = 15;
 
 	size_t LEMPEL_SIZE;
-	uint16_t* LEMPEL = new uint16_t[size];
+	uint8_t* LEMPEL = new uint8_t[size];
 	uint8_t* LEMPEL_NUKE = new uint8_t[size];
 	for(int i=0;i<size;i++){
 		LEMPEL_NUKE[i] = 0;
@@ -476,7 +476,8 @@ int layer_encode(
 		size,
 		LEMPEL,
 		&LEMPEL_SIZE,
-		LEMPEL_NUKE
+		LEMPEL_NUKE,
+		9 + cruncher_mode*5
 	);
 	uint32_t* dummy1;
 	uint32_t* dummy2;
@@ -504,16 +505,16 @@ int layer_encode(
 		}
 	}
 
-	/*int lz_overhead = channel_encode(
+	int lz_overhead = channel_encode(
 		LEMPEL,
 		LEMPEL_SIZE,
 		10,
 		dummy1,
 		dummy2,
 		dummy3
-	);*/
+	);
 
-	int lz_overhead = channel_encode(
+	/*int lz_overhead = channel_encode(
 		LEMPEL,
 		LEMPEL_SIZE,
 		10,
@@ -521,7 +522,7 @@ int layer_encode(
 		dummy1,
 		dummy2,
 		dummy3
-	);
+	);*/
 	if(lz_overhead > (LEMPEL_SIZE+1)*10/8){
 		lz_overhead = (LEMPEL_SIZE+1)*10/8;
 	}
