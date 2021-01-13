@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "platform.hpp"
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -9,14 +9,14 @@
 #include <cmath>
 #include <math.h>
 
-#include "rans64.h"
-#include "file_io.h"
-#include "symbolstats.h"
-#include "channel.h"
-#include "patches.h"
-#include "lz.h"
-#include "channel_encode.h"
-#include "bitimage.h"
+#include "rans64.hpp"
+#include "file_io.hpp"
+#include "symbolstats.hpp"
+#include "channel.hpp"
+#include "patches.hpp"
+#include "lz.hpp"
+#include "channel_encode.hpp"
+#include "bitimage.hpp"
 
 uint8_t midpoint(uint8_t a, uint8_t b){
 	return a + (b - a) / 2;

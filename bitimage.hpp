@@ -1,7 +1,7 @@
 #ifndef BITIMAGE_HEADER
 #define BITIMAGE_HEADER
 
-#include "rans64.h"
+#include "rans64.hpp"
 
 struct SymbolStats_2{
 	uint32_t freqs[2];

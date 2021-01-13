@@ -1,7 +1,7 @@
 #ifndef LZ_HEADER
 #define LZ_HEADER
 
-#include "channel_encode.h"
+#include "channel_encode.hpp"
 
 int find_lz(
 	uint16_t* source,

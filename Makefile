@@ -2,5 +2,5 @@ LIBS=-lm -lrt
 
 all: hoh
 
-hoh: hoh.cpp platform.h rans64.h channel.h file_io.h symbolstats.h patches.h lz.h channel_encode.h bitimage.h
+hoh: hoh.cpp platform.hpp rans64.hpp channel.hpp file_io.hpp symbolstats.hpp patches.hpp lz.hpp channel_encode.hpp bitimage.hpp
 	g++ -o $@ $< -O3 $(LIBS)
