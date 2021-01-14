@@ -46,6 +46,7 @@ body{
 		<button id="encodeButton">Load</button>
 		<h4>Predictors:</h4>
 		<div id="parameters"></div>
+		<button onclick="tune()">Tune</button>
 		<pre id="encodeStats"></pre>
 		<script>
 let saveByteArray = (function(){
@@ -127,30 +128,35 @@ let predictors = [
 		name: "top",
 		predict: function(L,TL,T,TR){return T}
 	},
-	{
+	/*{
 		name: "top-left",
 		predict: function(L,TL,T,TR){return TL}
 	},
 	{
 		name: "top-right",
 		predict: function(L,TL,T,TR){return TR}
-	},
+	},*/
 	{
 		name: "avg L-T",
 		predict: function(L,TL,T,TR){return Math.floor((T + L)/2)}
 	},
-	{
+	/*{
 		name: "avg L-TL",
 		predict: function(L,TL,T,TR){return Math.floor((L + TL)/2)}
-	},
+	},*/
 	{
 		name: "FFV1",
 		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
+	},
+	{
+		name: "median",
+		predict: function(L,TL,T,TR){return [T,L,TL].sort((a,b) => a - b)[1]}
 	}
 ]
 
-let predict = function(parsnips){
+let predict = function(parsnips,doNotDraw){
 	let previous_row = new Array(green_channel[0].length + 1).fill(128);
+	let previous_row_best = new Array(green_channel[0].length).fill(0);
 	let previous_TL = 128;
 	let previous = 128;
 	let misses = [];
@@ -162,9 +168,13 @@ let predict = function(parsnips){
 			let T = previous_row[i];
 			let TR = previous_row[i+1];
 
-			let widthIndex = Math.floor(3*i/green_channel[0].length);
-			let heightIndex = Math.floor(3*j/green_channel.length);
-			let val = green_channel[j][i] - predictors[parsnips[heightIndex*3 + widthIndex]].predict(L,TL,T,TR) + 256;
+			let widthIndex = Math.floor(6*i/green_channel[0].length);
+			let heightIndex = Math.floor(6*j/green_channel.length);
+			let predictorIndex = parsnips[heightIndex*3 + widthIndex];
+
+			let val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256;
+
+
 			misses.push(val);
 			freqs[val]++;
 			if(i == 0){
@@ -191,17 +201,20 @@ let predict = function(parsnips){
 		}
 		costData.push(row);
 	};
-	document.getElementById("estimate").innerText = Math.round(cost_sum/8);
-	drawCost(costData,green_channel[0].length,green_channel.length);
+	document.getElementById("estimate").innerText = Math.round(cost_sum/8) + " " + parsnips.join(",");
+	if(doNotDraw){
+		drawCost(costData,green_channel[0].length,green_channel.length);
+	}
+	return cost_sum;
 }
 
-let parcels = new Array(9).fill(0);
+let parcels = new Array(36).fill(0);
 
 let parameters = document.getElementById("parameters");
-for(let i=0;i<3;i++){
+for(let i=0;i<6;i++){
 	let row = document.createElement("div");
 	parameters.appendChild(row);
-	for(let j=0;j<3;j++){
+	for(let j=0;j<6;j++){
 		let cell = document.createElement("div");
 		cell.style.display = "inline";
 		row.appendChild(cell);
@@ -213,12 +226,31 @@ for(let i=0;i<3;i++){
 			option.innerText = predictor.name;
 			option.value = index;
 		});
-		let position = i*3 + j;
+		let position = i*6 + j;
 		para.oninput = function(){
 			parcels[position] = parseInt(para.value);
 			predict(parcels);
 		}
 	}
+}
+
+function tune(){
+	let filt = new Array(36).fill(3);
+	let cost = predict(filt,true);
+	let origCost = cost;
+	for(let i=0;i<36;i++){
+		for(let j=0;j<5;j++){
+			let localcopy = filt.map(a => a);
+			localcopy[i] = j;
+			let newCost = predict(localcopy,true);
+			if(newCost < cost){
+				cost = newCost;
+				filt = localcopy;
+			}
+		}
+	}
+	predict(filt,false);
+	console.log(cost/origCost);
 }
 
 
