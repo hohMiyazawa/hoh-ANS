@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Predictor experiments</title>
+		<style>
+.canvasContainer{
+	display: inline-block;
+	padding: 5px;
+	margin: 5px;
+	border: solid;
+	border-width: 1px;
+	border-radius: 3px;
+	max-width: 40%;
+}
+canvas{
+	max-width: 100%;
+	max-height: 600px;
+	min-width: 16px;
+}
+body{
+	background: rgb(200,200,200);
+	padding: 20px;
+}
+		</style>
+		<script src="colourspace.js"></script>
+		<script src="predictors.js"></script>
+	</head>
+	<body>
+		<div class="canvasContainer">
+			<h2>Original</h2>
+			<canvas id="preview" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Current layer</h2>
+			<canvas id="render" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Cost estimation</h2>
+			<p id="estimate"></p>
+			<canvas id="render_cost" width="0" height="0"></canvas>
+		</div>
+		<hr>
+		<h3>Upload</h3>
+		<input type="file" id="imageInput"><br>
+		<button id="encodeButton">Load</button>
+		<h4>Predictors:</h4>
+		<div id="parameters"></div>
+		<pre id="encodeStats"></pre>
+		<script>
+let saveByteArray = (function(){
+	let a = document.createElement("a");
+	document.body.appendChild(a);
+	a.style = "display: none";
+	return function(data,name){
+		let blob = new Blob(data, {type: "octet/stream"});
+		let url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = name;
+		a.click();
+		window.URL.revokeObjectURL(url)
+	}
+}())
+
+function readFileAsArrayBuffer(file, success, error) {
+	let fr = new FileReader();
+	fr.addEventListener('error', error, false);
+	if(fr.readAsBinaryString){
+		fr.addEventListener('load', function(){
+			var string = this.resultString != null ? this.resultString : this.result;
+			var result = new Uint8Array(string.length);
+			for(var i = 0; i < string.length; i++){
+				result[i] = string.charCodeAt(i)
+			}
+			success(result.buffer)
+		}, false);
+		return fr.readAsBinaryString(file);
+	}
+	else {
+		fr.addEventListener('load', function(){
+			success(this.result)
+		}, false);
+		return fr.readAsArrayBuffer(file)
+	}
+}
+
+function drawToCanvas(imageData,id){
+	let canvas = document.getElementById(id);
+	if(!imageData.imageData){
+		return
+	}
+	canvas.width = imageData.width;
+	canvas.height = imageData.height;
+	let ctx = canvas.getContext("2d");
+	let image = new ImageData(new Uint8ClampedArray(imageData.imageData),imageData.width);
+	ctx.putImageData(image,0,0);
+}
+
+function drawGreyscale(imageData,width,height){
+	let opacity = new Array(imageData.length).fill(0).map(_ => new Array(imageData[0].length).fill(255));
+	let image = new ImageData(new Uint8ClampedArray(multiplexChannels([imageData,imageData,imageData,opacity])),width);
+	let canvas = document.getElementById("render");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+function drawCost(imageData,width,height){
+	let opacity = new Array(imageData.length).fill(0).map(_ => new Array(imageData[0].length).fill(255));
+	let image = new ImageData(new Uint8ClampedArray(multiplexChannels([imageData,imageData,imageData,opacity])),width);
+	let canvas = document.getElementById("render_cost");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+let green_channel;
+
+let predictors = [
+	{
+		name: "left",
+		predict: function(L,TL,T,TR){return L}
+	},
+	{
+		name: "top",
+		predict: function(L,TL,T,TR){return T}
+	},
+	{
+		name: "top-left",
+		predict: function(L,TL,T,TR){return TL}
+	},
+	{
+		name: "top-right",
+		predict: function(L,TL,T,TR){return TR}
+	},
+	{
+		name: "avg L-T",
+		predict: function(L,TL,T,TR){return Math.floor((T + L)/2)}
+	},
+	{
+		name: "avg L-TL",
+		predict: function(L,TL,T,TR){return Math.floor((L + TL)/2)}
+	},
+	{
+		name: "FFV1",
+		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
+	}
+]
+
+let predict = function(parsnips){
+	let previous_row = new Array(green_channel[0].length + 1).fill(128);
+	let previous_TL = 128;
+	let previous = 128;
+	let misses = [];
+	let freqs = new Array(512).fill(0);
+	for(let j=0;j<green_channel.length;j++){
+		for(let i=0;i<green_channel[0].length;i++){
+			let L = previous;
+			let TL = previous_TL;
+			let T = previous_row[i];
+			let TR = previous_row[i+1];
+
+			let widthIndex = Math.floor(3*i/green_channel[0].length);
+			let heightIndex = Math.floor(3*j/green_channel.length);
+			let val = green_channel[j][i] - predictors[parsnips[heightIndex*3 + widthIndex]].predict(L,TL,T,TR) + 256;
+			misses.push(val);
+			freqs[val]++;
+			if(i == 0){
+				previous_TL = 128;
+				previous_row[green_channel[0].length-1] = previous;
+			}
+			else{
+				previous_TL = previous_row[i-1];
+				previous_row[i-1] = previous;
+			}
+			previous = green_channel[j][i];
+		}
+	};
+	let entropy = freqs.map(val => -Math.log2(val/(green_channel.length*green_channel[0].length)));
+
+	let costData = [];
+	let cost_sum = 0;
+	for(let j=0;j<green_channel.length;j++){
+		let row = [];
+		for(let i=0;i<green_channel[0].length;i++){
+			let cost = entropy[misses[j * green_channel[0].length + i]];
+			cost_sum += cost;
+			row.push(Math.round(cost * 5));
+		}
+		costData.push(row);
+	};
+	document.getElementById("estimate").innerText = Math.round(cost_sum/8);
+	drawCost(costData,green_channel[0].length,green_channel.length);
+}
+
+let parcels = new Array(9).fill(0);
+
+let parameters = document.getElementById("parameters");
+for(let i=0;i<3;i++){
+	let row = document.createElement("div");
+	parameters.appendChild(row);
+	for(let j=0;j<3;j++){
+		let cell = document.createElement("div");
+		cell.style.display = "inline";
+		row.appendChild(cell);
+		let para = document.createElement("select");
+		cell.appendChild(para);
+		predictors.forEach((predictor,index) => {
+			let option = document.createElement("option");
+			para.appendChild(option);
+			option.innerText = predictor.name;
+			option.value = index;
+		});
+		let position = i*3 + j;
+		para.oninput = function(){
+			parcels[position] = parseInt(para.value);
+			predict(parcels);
+		}
+	}
+}
+
+
+const inputElementEncode = document.getElementById("imageInput");
+const buttonElementEncode = document.getElementById("encodeButton");
+
+let html_encode = function(){
+	if(inputElementEncode.files && inputElementEncode.files[0]){
+		let fileName = inputElementEncode.files[0].name;
+		let FR = new FileReader();
+		FR.onload = function(e){
+			let img = new Image();
+			img.addEventListener("load", function(){
+				let canvas = document.getElementById("preview");
+				canvas.height = img.height;
+				canvas.width = img.width;
+				let ctx = canvas.getContext("2d");
+				ctx.drawImage(img, 0, 0);
+				let contextData = ctx.getImageData(0,0,img.width,img.height).data;
+
+				let sub_green_data = rgba_to_subgreena(contextData);
+				green_channel = deMultiplexChannels(sub_green_data,img.width,img.height)[0];
+				drawGreyscale(green_channel,img.width,img.height);
+			});
+			img.src = e.target.result;
+		};       
+		FR.readAsDataURL(inputElementEncode.files[0]);
+	}
+}
+inputElementEncode.addEventListener("change",html_encode,false);
+buttonElementEncode.addEventListener("click",html_encode,false);
+		</script>
+	</body>
+</html>
