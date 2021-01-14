@@ -130,7 +130,8 @@ int find_lz_rgb(
 	uint8_t* lz_symbols,
 	size_t* lz_symbol_size,
 	uint8_t* nukemap,
-	int distance
+	int distance,
+	int break_even_bonus
 ){
 	int lz_index = 0;
 	int since_last = 0;
@@ -169,7 +170,7 @@ int find_lz_rgb(
 				}
 			}
 		}
-		if(longest < 4){
+		if(longest < 4 + break_even_bonus){
 			since_last++;
 			if(since_last == 255){
 				since_last = 0;

@@ -890,6 +890,37 @@ int layer_encode(
 	return possible_size + 1 + tile_cost;
 }
 
+int count_colours(uint8_t* in_bytes, size_t in_size){
+	uint8_t red[256];
+	uint8_t green[256];
+	uint8_t blue[256];
+	int palette_index = 0;
+
+	for(int i=0;i<in_size;i += 3){
+		int found = 0;
+		for(int j=0;j<palette_index;j++){
+			if(
+				red[j] == in_bytes[i]
+				&& green[j] == in_bytes[i + 1]
+				&& blue[j] == in_bytes[i + 2]
+			){
+				found = 1;
+				break;
+			}
+		}
+		if(found == 0){
+			red[palette_index] = in_bytes[i];
+			green[palette_index] = in_bytes[i + 1];
+			blue[palette_index] = in_bytes[i + 2];
+			palette_index++;
+			if(palette_index == 257){
+				return -1;
+			}
+		}
+	}
+	return palette_index;
+}
+
 int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int cruncher_mode, uint8_t* LEMPEL_NUKE){
 	uint8_t red[256];
 	uint8_t green[256];
@@ -1007,13 +1038,31 @@ int main(int argc, char *argv[]){
 		seek_distance = 14;
 	}
 
+	int break_even_addition = 0;
+	int colour_count = count_colours(in_bytes, in_size);
+	if(colour_count != -1){
+		if(colour_count <= 4){
+			break_even_addition = 32;
+		}
+		else if(colour_count <= 8){
+			break_even_addition = 20;
+		}
+		else if(colour_count <= 16){
+			break_even_addition = 10;
+		}
+		else if(colour_count <= 32){
+			break_even_addition = 2;
+		}
+	}
+
 	int lz_external_overhead = find_lz_rgb(
 		in_bytes,
 		in_size,
 		LEMPEL,
 		&lz_symbol_size,
 		LEMPEL_NUKE,
-		seek_distance
+		seek_distance,
+		break_even_addition
 	);
 
 	int best_size;
