@@ -117,6 +117,8 @@ function drawCost(imageData,width,height){
 	ctx.putImageData(image,0,0);
 }
 
+const grid = 16;
+
 let green_channel;
 
 let predictors = [
@@ -147,10 +149,6 @@ let predictors = [
 	{
 		name: "FFV1",
 		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
-	},
-	{
-		name: "median",
-		predict: function(L,TL,T,TR){return [T,L,TL].sort((a,b) => a - b)[1]}
 	}
 ]
 
@@ -168,9 +166,9 @@ let predict = function(parsnips,doNotDraw){
 			let T = previous_row[i];
 			let TR = previous_row[i+1];
 
-			let widthIndex = Math.floor(6*i/green_channel[0].length);
-			let heightIndex = Math.floor(6*j/green_channel.length);
-			let predictorIndex = parsnips[heightIndex*3 + widthIndex];
+			let widthIndex = Math.floor(grid*i/green_channel[0].length);
+			let heightIndex = Math.floor(grid*j/green_channel.length);
+			let predictorIndex = parsnips[heightIndex*grid + widthIndex];
 
 			let val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256;
 
@@ -208,13 +206,13 @@ let predict = function(parsnips,doNotDraw){
 	return cost_sum;
 }
 
-let parcels = new Array(36).fill(0);
+let parcels = new Array(grid*grid).fill(0);
 
 let parameters = document.getElementById("parameters");
-for(let i=0;i<6;i++){
+for(let i=0;i<grid;i++){
 	let row = document.createElement("div");
 	parameters.appendChild(row);
-	for(let j=0;j<6;j++){
+	for(let j=0;j<grid;j++){
 		let cell = document.createElement("div");
 		cell.style.display = "inline";
 		row.appendChild(cell);
@@ -226,7 +224,7 @@ for(let i=0;i<6;i++){
 			option.innerText = predictor.name;
 			option.value = index;
 		});
-		let position = i*6 + j;
+		let position = i*grid + j;
 		para.oninput = function(){
 			parcels[position] = parseInt(para.value);
 			predict(parcels);
@@ -235,11 +233,11 @@ for(let i=0;i<6;i++){
 }
 
 function tune(){
-	let filt = new Array(36).fill(3);
+	let filt = new Array(grid*grid).fill(3);
 	let cost = predict(filt,true);
 	let origCost = cost;
-	for(let i=0;i<36;i++){
-		for(let j=0;j<5;j++){
+	for(let i=0;i<grid*grid;i++){
+		for(let j=0;j<4;j++){
 			let localcopy = filt.map(a => a);
 			localcopy[i] = j;
 			let newCost = predict(localcopy,true);

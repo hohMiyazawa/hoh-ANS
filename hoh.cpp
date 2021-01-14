@@ -236,6 +236,178 @@ uint16_t* channelpredict_fastpath(uint16_t* data, size_t size, int width, int he
 	return out_buf;
 }
 
+uint16_t* channelpredict_section(
+	uint16_t* data,
+	size_t size,
+	int width,
+	int height,
+	int depth,
+	int x_tiles,
+	int y_tiles,
+	int x,
+	int y,
+	uint16_t predictor,
+	size_t* buffer_size
+){
+	int centre = 1<<depth;
+	int tile_width  = (width  + x_tiles - 1)/x_tiles;
+	int tile_height = (height + y_tiles - 1)/y_tiles;
+	int x_coord = x*tile_width;
+	int y_coord = y*tile_height;
+	uint16_t* out_buf = new uint16_t[tile_width*tile_height];
+
+	int best_pred[tile_width];//approximate
+	for(int i=0;i<tile_width;i++){
+		best_pred[i] = 4;
+	}
+
+	uint16_t top_row[tile_width];
+	uint16_t forige;
+	uint16_t forige_TL;
+
+	if(y){
+		for(int i=0;i<tile_width;i++){
+			top_row[i] = data[y_coord*width + x_coord + i - width];
+		}
+	}
+	else{
+		for(int i=0;i<tile_width;i++){
+			top_row[i] = centre/2;
+		}
+	}
+	size_t index = 0;
+	for(int y_m=0;y_m < tile_height && y_coord + y_m < height;y_m++){
+		if(x){
+			forige = data[(y_coord + y_m)*width + x_coord - 1];
+			if(y_m || y){
+				forige_TL = data[(y_coord + y_m - 1)*width + x_coord - 1];
+			}
+			else{
+				forige_TL = centre/2;
+			}
+		}
+		else{
+			forige    = centre/2;
+			forige_TL = centre/2;
+		}
+		for(int x_m=0;x_m < tile_width && x_coord + x_m < width;x_m++){
+			int datalocation = (y_coord + y_m)*width + x_coord + x_m;
+			uint16_t L = forige;
+			uint16_t T = top_row[x_m];
+			uint16_t TL = forige_TL;
+			uint16_t TR = top_row[(x_m + tile_width + 1) % tile_width];
+			uint16_t predictions[16] = {
+				L,
+				T,
+				TL,
+				TR,
+				median(T,L,T+L-TL),
+				midpoint(L,T),
+				midpoint(L,TL),
+				midpoint(TL,T),
+				midpoint(T,TR),
+				paeth(L,TL,T),
+				average3(L,L,TL),
+				average3(L,TL,TL),
+				average3(TL,TL,T),
+				average3(TL,T,T),
+				average3(T,T,TR),
+				average3(T,TR,TR)
+			};
+			out_buf[index++] = data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + tile_width - 1) % tile_width]]) + centre;
+			forige_TL = top_row[x_m];
+			top_row[x_m] = data[datalocation];
+			forige = data[datalocation];
+			int best_val = centre*2;
+			best_pred[x_m] = 0;
+			for(int j=0;j<16;j++){
+				int val = std::abs(data[datalocation] - predictions[j]);
+				if(val < best_val && (predictor & (1 << j))){
+					best_val = val;
+					best_pred[x_m] = j;
+				}
+			}
+		}
+	}
+	*buffer_size = index;
+	return out_buf;
+}
+
+uint16_t* channelpredict_all(
+	uint16_t* data,
+	size_t size,
+	int width,
+	int height,
+	int depth,
+	int x_tiles,
+	int y_tiles,
+	uint16_t* tile_map
+){
+	int centre = 1<<depth;
+	int tile_width  = (width  + x_tiles - 1)/x_tiles;
+	int tile_height = (height + y_tiles - 1)/y_tiles;
+	uint16_t* out_buf = new uint16_t[size];
+
+	int best_pred[width];
+	for(int i=0;i<width;i++){
+		best_pred[i] = 3;
+	}
+
+	uint16_t top_row[width];
+	uint16_t forige;
+	uint16_t forige_TL;
+	for(int i=0;i<width;i++){
+		top_row[i] = centre/2;
+	}
+	size_t index = 0;
+	for(int y_m=0;y_m < height;y_m++){
+		forige    = centre/2;
+		forige_TL = centre/2;
+		for(int x_m=0;x_m < width;x_m++){
+			int datalocation = y_m*width + x_m;
+			uint16_t prediction;
+			uint16_t predictor = tile_map[(y_m/tile_height) * x_tiles + (x_m/tile_width)];
+			uint16_t L = forige;
+			uint16_t T = top_row[x_m];
+			uint16_t TL = forige_TL;
+			uint16_t TR = top_row[(x_m + width + 1) % width];
+			uint16_t predictions[16] = {
+				L,
+				T,
+				TL,
+				TR,
+				median(T,L,T+L-TL),
+				midpoint(L,T),
+				midpoint(L,TL),
+				midpoint(TL,T),
+				midpoint(T,TR),
+				paeth(L,TL,T),
+				average3(L,L,TL),
+				average3(L,TL,TL),
+				average3(TL,TL,T),
+				average3(TL,T,T),
+				average3(T,T,TR),
+				average3(T,TR,TR)
+			};
+			out_buf[index++] = data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + width - 1) % width]]) + centre;
+			forige_TL = top_row[x_m];
+			top_row[x_m] = data[datalocation];
+			forige = data[datalocation];
+
+			int best_val = centre*2;
+			best_pred[x_m] = 0;
+			for(int j=0;j<16;j++){
+				int val = std::abs(data[datalocation] - predictions[j]);
+				if(val < best_val && (predictor & (1 << j))){
+					best_val = val;
+					best_pred[x_m] = j;
+				}
+			}
+		}
+	}
+	return out_buf;
+}
+
 uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int depth, uint32_t predictors){
 	if(predictors == 0b0000000000010000){
 		return channelpredict_fastpath(data, size, width, height, depth);
@@ -320,7 +492,21 @@ int layer_encode(
 	uint32_t* dummy3;
 	int lz_used = 0;
 
-	uint16_t* predict = channelpredict(data, size, width, height, depth, 0b0000000000010000);
+	size_t chunk_size;
+
+	uint16_t* predict = channelpredict_section(
+		data,
+		size,
+		width,
+		height,
+		depth,
+		1,
+		1,
+		0,
+		0,
+		0b0000000000010000,
+		&chunk_size
+	);
 	int channel_size = channel_encode(
 		predict,
 		size,
@@ -421,12 +607,45 @@ int layer_encode(
 		lz_used = 1;
 	}
 
+	int total_tiles = 1;
+	int tile_cost = 2;
 	if(cruncher_mode){
-		uint32_t mask = 0b0000000000010000;
-		int temp_size;
+		int freqs[1<<(depth + 1)];
+		for(int i=0;i < (1<<(depth + 1));i++){
+			freqs[i] = 1;//to have no zero values, so the frequency table is usable for other predictors
+		}
+		for(int i=0;i<size;i++){
+			freqs[predict[i]]++;
+		}
+		/*for(int i=0;i < (1<<(depth + 1));i++){
+			printf("f %d\n",freqs[i]);
+		}*/
+		double entropy[1<<(depth + 1)];
+		for(int i=0;i < (1<<(depth + 1));i++){
+			entropy[i] = -std::log2((double)freqs[i]/(double)size);
+		}
+		/*for(int i=0;i < (1<<(depth + 1));i++){
+			printf("f %f\n",entropy[i]);
+		}*/
+		double total_entropy = 0;
+		for(int i=0;i < (1<<(depth + 1));i++){
+			total_entropy += entropy[i] * (freqs[i] - 1);
+		}
+		//printf("total entropy 1 %f\n",total_entropy/8);
 
-		uint32_t masks[11] = {
+		int grid_size = 40;
+
+		int x_tiles = (width + grid_size - 1)/grid_size;
+		int y_tiles = (height + grid_size - 1)/grid_size;
+		total_tiles = x_tiles*y_tiles;
+		uint16_t* predictor_list = new uint16_t[total_tiles];
+		double new_cost = 0;
+
+		uint16_t masks[14] = {
 			0b0000000000000001,
+			0b0000000000000010,
+			0b0000000000100000,
+			0b0000000000010000,
 			0b1111111110111111,//good
 			0b0000000000000011,
 			0b1111111111111101,
@@ -439,295 +658,233 @@ int layer_encode(
 
 			0b1111111111111111
 		};
-		for(int i=0;i<11 && i < 1 + cruncher_mode*3;i++){
-			predict = channelpredict(data, size, width, height, depth, masks[i]);
-			if(lz_used){
-				cleaned_pointer = 0;
-				for(int j=0;j<size;j++){
-					if(LEMPEL_NUKE[j] == 0){
-						predict_cleaned[cleaned_pointer++] = predict[j];
+		for(int i=0;i<total_tiles;i++){
+			double tile_cost = 99999999999;//yea, fix this later
+			for(int pred=0;pred<14 && pred < cruncher_mode*5;pred++){
+				uint16_t* tile_predict = channelpredict_section(
+					data,
+					size,
+					width,
+					height,
+					depth,
+					x_tiles,
+					y_tiles,
+					i % x_tiles,
+					i / x_tiles,
+					masks[pred],
+					&chunk_size
+				);
+				double current_cost = 0;
+				for(int val=0;val<chunk_size;val++){
+					current_cost += entropy[tile_predict[val]];
+				}
+				if(current_cost < tile_cost){
+					tile_cost = current_cost;
+					predictor_list[i] = masks[pred];
+				}
+			}
+			new_cost += tile_cost;
+		}
+		//printf("total entropy 2 %f\n",new_cost/8);
+		for(int i=0;i<total_tiles;i++){
+			//printf("preds %d\n",predictor_list[i]);
+		}
+
+		predict = channelpredict_all(
+			data,
+			size,
+			width,
+			height,
+			depth,
+			x_tiles,
+			y_tiles,
+			predictor_list
+		);
+		if(cruncher_mode > 1){//refine estimate
+
+			for(int i=0;i < (1<<(depth + 1));i++){
+				freqs[i] = 1;
+			}
+			for(int i=0;i<size;i++){
+				freqs[predict[i]]++;
+			}
+			for(int i=0;i < (1<<(depth + 1));i++){
+				entropy[i] = -std::log2((double)freqs[i]/(double)size);
+			}
+			total_entropy = 0;
+			for(int i=0;i < (1<<(depth + 1));i++){
+				total_entropy += entropy[i] * (freqs[i] - 1);
+			}
+			//printf("total entropy 3 %f\n",total_entropy/8);
+
+			new_cost = 0;
+			for(int i=0;i<total_tiles;i++){
+				double tile_cost = 99999999999;//yea, fix this later
+				for(int pred=0;pred<14 && pred < cruncher_mode*5;pred++){
+					uint16_t* tile_predict = channelpredict_section(
+						data,
+						size,
+						width,
+						height,
+						depth,
+						x_tiles,
+						y_tiles,
+						i % x_tiles,
+						i / x_tiles,
+						masks[pred],
+						&chunk_size
+					);
+					double current_cost = 0;
+					for(int val=0;val<chunk_size;val++){
+						current_cost += entropy[tile_predict[val]];
+					}
+					if(current_cost < tile_cost){
+						tile_cost = current_cost;
+						predictor_list[i] = masks[pred];
 					}
 				}
-				temp_size = channel_encode(
-					predict_cleaned,
-					cleaned_pointer,
-					depth + 1,
-					prob_bits,
-					dummy1,
-					dummy2,
-					dummy3
-				) + lz_overhead;
+				new_cost += tile_cost;
 			}
-			else{
-				temp_size = channel_encode(
-					predict,
-					size,
-					depth + 1,
-					prob_bits,
-					dummy1,
-					dummy2,
-					dummy3
-				);
-			}
-			if(temp_size < possible_size){
-				possible_size = temp_size;
-				mask = masks[i];
+			//printf("total entropy 4 %f\n",new_cost/8);
+		}
+		//printf("tiles %d\n",total_tiles);
+
+		tile_cost = 4 + (total_tiles)/2;
+
+		delete[] predictor_list;
+	}
+	if(cruncher_mode){
+		int temp_size;
+		cleaned_pointer = 0;
+		for(int j=0;j<size;j++){
+			if(LEMPEL_NUKE[j] == 0){
+				predict_cleaned[cleaned_pointer++] = predict[j];
 			}
 		}
-		/*int best_found = -1;
-		for(int i=1;i<16;i++){
-			predict = channelpredict(data, size, width, height, depth, 0xFFFF ^ (1 << i));
-			if(lz_used){
-				cleaned_pointer = 0;
-				for(int j=0;j<size;j++){
-					if(LEMPEL_NUKE[j] == 0){
-						predict_cleaned[cleaned_pointer++] = predict[j];
-					}
+		if(lz_used){
+			int temp_size1 = channel_encode(
+				predict_cleaned,
+				cleaned_pointer,
+				depth + 1,
+				16,
+				dummy1,
+				dummy2,
+				dummy3
+			) + lz_overhead;
+			int temp_size2 = channel_encode(
+				predict_cleaned,
+				cleaned_pointer,
+				depth + 1,
+				15,
+				dummy1,
+				dummy2,
+				dummy3
+			) + lz_overhead;
+			if(temp_size1 < temp_size2){
+				if(temp_size1 < possible_size){
+					possible_size = temp_size1;
 				}
-				temp_size = channel_encode(
-					predict_cleaned,
-					cleaned_pointer,
-					depth + 1,
-					prob_bits,
-					dummy1,
-					dummy2,
-					dummy3
-				) + lz_overhead;
-			}
-			else{
-				temp_size = channel_encode(
-					predict,
-					size,
-					depth + 1,
-					prob_bits,
-					dummy1,
-					dummy2,
-					dummy3
-				);
-			}
-			if(temp_size < possible_size){
-				possible_size = temp_size;
-				mask = 0xFFFF ^ (1 << i);
-				best_found = i;
-			}
-		}
-		if(best_found != -1){
-			int best_found2 = -1;
-			for(int i=1;i<16;i++){
-				if(best_found == i){
-					continue;
-				}
-				predict = channelpredict(data, size, width, height, depth, mask ^ (1 << i));
-				if(lz_used){
-					cleaned_pointer = 0;
-					for(int j=0;j<size;j++){
-						if(LEMPEL_NUKE[j] == 0){
-							predict_cleaned[cleaned_pointer++] = predict[j];
-						}
-					}
+				for(uint32_t i=17;i < 20;i++){
 					temp_size = channel_encode(
 						predict_cleaned,
 						cleaned_pointer,
 						depth + 1,
-						prob_bits,
+						i,
 						dummy1,
 						dummy2,
 						dummy3
 					) + lz_overhead;
-				}
-				else{
-					temp_size = channel_encode(
-						predict,
-						size,
-						depth + 1,
-						prob_bits,
-						dummy1,
-						dummy2,
-						dummy3
-					);
-				}
-				if(temp_size < possible_size){
-					possible_size = temp_size;
-					mask = 0xFFFF ^ (1 << i);
-					best_found2 = i;
-				}
-			}
-			if(best_found2 != -1){
-				for(int i=1;i<16;i++){
-					if(best_found == i || best_found2 == i){
-						continue;
-					}
-					predict = channelpredict(data, size, width, height, depth, mask ^ (1 << i));
-					if(lz_used){
-						cleaned_pointer = 0;
-						for(int j=0;j<size;j++){
-							if(LEMPEL_NUKE[j] == 0){
-								predict_cleaned[cleaned_pointer++] = predict[j];
-							}
-						}
-						temp_size = channel_encode(
-							predict_cleaned,
-							cleaned_pointer,
-							depth + 1,
-							prob_bits,
-							dummy1,
-							dummy2,
-							dummy3
-						) + lz_overhead;
-					}
-					else{
-						temp_size = channel_encode(
-							predict,
-							size,
-							depth + 1,
-							prob_bits,
-							dummy1,
-							dummy2,
-							dummy3
-						);
-					}
 					if(temp_size < possible_size){
 						possible_size = temp_size;
-						mask = 0xFFFF ^ (1 << i);
-					}
-				}
-			}
-		}*/
-		//printf("maskend %d\n",(int)mask);
-		if(cruncher_mode > 1){
-			predict = channelpredict(data, size, width, height, depth, mask);
-			cleaned_pointer = 0;
-			for(int j=0;j<size;j++){
-				if(LEMPEL_NUKE[j] == 0){
-					predict_cleaned[cleaned_pointer++] = predict[j];
-				}
-			}
-			if(lz_used){
-				int temp_size1 = channel_encode(
-					predict_cleaned,
-					cleaned_pointer,
-					depth + 1,
-					16,
-					dummy1,
-					dummy2,
-					dummy3
-				) + lz_overhead;
-				int temp_size2 = channel_encode(
-					predict_cleaned,
-					cleaned_pointer,
-					depth + 1,
-					15,
-					dummy1,
-					dummy2,
-					dummy3
-				) + lz_overhead;
-				if(temp_size1 < temp_size2){
-					if(temp_size1 < possible_size){
-						possible_size = temp_size1;
-					}
-					for(uint32_t i=17;i < 20;i++){
-						temp_size = channel_encode(
-							predict_cleaned,
-							cleaned_pointer,
-							depth + 1,
-							i,
-							dummy1,
-							dummy2,
-							dummy3
-						) + lz_overhead;
-						if(temp_size < possible_size){
-							possible_size = temp_size;
-						}
-					}
-				}
-				else{
-					if(temp_size2 < possible_size){
-						possible_size = temp_size2;
-					}
-					for(uint32_t i=14;i > 11;i--){
-						temp_size = channel_encode(
-							predict_cleaned,
-							cleaned_pointer,
-							depth + 1,
-							i,
-							dummy1,
-							dummy2,
-							dummy3
-						) + lz_overhead;
-						if(temp_size < possible_size){
-							possible_size = temp_size;
-						}
 					}
 				}
 			}
 			else{
-				int temp_size1 = channel_encode(
-					predict,
-					size,
-					depth + 1,
-					16,
-					dummy1,
-					dummy2,
-					dummy3
-				);
-				int temp_size2 = channel_encode(
-					predict,
-					size,
-					depth + 1,
-					15,
-					dummy1,
-					dummy2,
-					dummy3
-				);
-				if(temp_size1 < temp_size2){
-					if(temp_size1 < possible_size){
-						possible_size = temp_size1;
-					}
-					for(uint32_t i=17;i < 20;i++){
-						temp_size = channel_encode(
-							predict,
-							size,
-							depth + 1,
-							i,
-							dummy1,
-							dummy2,
-							dummy3
-						);
-						if(temp_size < possible_size){
-							possible_size = temp_size;
-						}
+				if(temp_size2 < possible_size){
+					possible_size = temp_size2;
+				}
+				for(uint32_t i=14;i > 11;i--){
+					temp_size = channel_encode(
+						predict_cleaned,
+						cleaned_pointer,
+						depth + 1,
+						i,
+						dummy1,
+						dummy2,
+						dummy3
+					) + lz_overhead;
+					if(temp_size < possible_size){
+						possible_size = temp_size;
 					}
 				}
-				else{
-					if(temp_size2 < possible_size){
-						possible_size = temp_size2;
+			}
+		}
+		else{
+			int temp_size1 = channel_encode(
+				predict,
+				size,
+				depth + 1,
+				16,
+				dummy1,
+				dummy2,
+				dummy3
+			);
+			int temp_size2 = channel_encode(
+				predict,
+				size,
+				depth + 1,
+				15,
+				dummy1,
+				dummy2,
+				dummy3
+			);
+			if(temp_size1 < temp_size2){
+				if(temp_size1 < possible_size){
+					possible_size = temp_size1;
+				}
+				for(uint32_t i=17;i < 20;i++){
+					temp_size = channel_encode(
+						predict,
+						size,
+						depth + 1,
+						i,
+						dummy1,
+						dummy2,
+						dummy3
+					);
+					if(temp_size < possible_size){
+						possible_size = temp_size;
 					}
-					for(uint32_t i=14;i > 11;i--){
-						temp_size = channel_encode(
-							predict,
-							size,
-							depth + 1,
-							i,
-							dummy1,
-							dummy2,
-							dummy3
-						);
-						if(temp_size < possible_size){
-							possible_size = temp_size;
-						}
+				}
+			}
+			else{
+				if(temp_size2 < possible_size){
+					possible_size = temp_size2;
+				}
+				for(uint32_t i=14;i > 11;i--){
+					temp_size = channel_encode(
+						predict,
+						size,
+						depth + 1,
+						i,
+						dummy1,
+						dummy2,
+						dummy3
+					);
+					if(temp_size < possible_size){
+						possible_size = temp_size;
 					}
 				}
 			}
 		}
 	}
 
-	if(cruncher_mode > 0){
-		delete[] LEMPEL;
-		delete[] LEMPEL_NUKE;
-		delete[] predict_cleaned;
-	}
+	delete[] predict;
+	delete[] LEMPEL;
+	delete[] LEMPEL_NUKE;
+	delete[] predict_cleaned;
 
-	return possible_size + 1;
+	return possible_size + 1 + tile_cost;
 }
 
 int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int cruncher_mode){
