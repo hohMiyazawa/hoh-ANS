@@ -481,7 +481,8 @@ int layer_encode(
 	int width,
 	int height,
 	int depth,
-	int cruncher_mode
+	int cruncher_mode,
+	uint8_t* LEMPEL_NUKE
 ){
 	int possible_size = (depth*size + depth*size % 8)/8;
 
@@ -520,13 +521,14 @@ int layer_encode(
 		possible_size = channel_size;
 	}
 
-	int lz_overhead;
+	int lz_overhead = 0;//change later
 	uint16_t* predict_cleaned;
 	size_t cleaned_pointer;
+	int channel_size_lz;
+/*
 	size_t LEMPEL_SIZE;
 	uint8_t* LEMPEL;
 	uint8_t* LEMPEL_NUKE;
-	int channel_size_lz;
 	LEMPEL = new uint8_t[size];
 	LEMPEL_NUKE = new uint8_t[size];
 	for(int i=0;i<size;i++){
@@ -583,6 +585,7 @@ int layer_encode(
 			14
 		);
 	}
+*/
 
 	predict_cleaned = new uint16_t[size];
 	cleaned_pointer = 0;
@@ -880,14 +883,14 @@ int layer_encode(
 	}
 
 	delete[] predict;
-	delete[] LEMPEL;
-	delete[] LEMPEL_NUKE;
+	//delete[] LEMPEL;
+	//delete[] LEMPEL_NUKE;
 	delete[] predict_cleaned;
 
 	return possible_size + 1 + tile_cost;
 }
 
-int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int cruncher_mode){
+int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int cruncher_mode, uint8_t* LEMPEL_NUKE){
 	uint8_t red[256];
 	uint8_t green[256];
 	uint8_t blue[256];
@@ -930,7 +933,8 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 		width,
 		height,
 		8,
-		cruncher_mode
+		cruncher_mode,
+		LEMPEL_NUKE
 	) + palette_index*3 + 1;
 	delete[] INDEXED;
 	return encoded_size;
@@ -982,6 +986,36 @@ int main(int argc, char *argv[]){
 	static const uint32_t prob_bits = 16;
 	static const uint32_t prob_scale = 1 << prob_bits;
 
+	uint8_t* LEMPEL = new uint8_t[in_size/3];
+	uint8_t* LEMPEL_NUKE = new uint8_t[in_size/3];
+	for(int i=0;i<in_size/3;i++){
+		LEMPEL_NUKE[i] = 0;
+	}
+	size_t lz_symbol_size;
+
+	int seek_distance = 8;
+	if(cruncher_mode == 1){
+		seek_distance = 10;
+	}
+	else if(cruncher_mode == 2){
+		seek_distance = 11;
+	}
+	else if(cruncher_mode == 3){
+		seek_distance = 12;
+	}
+	else if(cruncher_mode == 4){
+		seek_distance = 14;
+	}
+
+	int lz_external_overhead = find_lz_rgb(
+		in_bytes,
+		in_size,
+		LEMPEL,
+		&lz_symbol_size,
+		LEMPEL_NUKE,
+		seek_distance
+	);
+
 	int best_size;
 	if(grey_test(in_bytes, in_size)){
 		uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
@@ -991,8 +1025,9 @@ int main(int argc, char *argv[]){
 			width,
 			height,
 			8,
-			cruncher_mode
-		);
+			cruncher_mode,
+			LEMPEL_NUKE
+		) + lz_external_overhead;
 		delete[] GREY;
 
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
@@ -1014,7 +1049,7 @@ int main(int argc, char *argv[]){
 
 		int rgb_size = -1;
 		int subtract_green_size = 0;
-		int palette_size = palette_encode(in_bytes, in_size, width, height, cruncher_mode);
+		int palette_size = palette_encode(in_bytes, in_size, width, height, cruncher_mode, LEMPEL_NUKE);
 
 		size_t split_size = in_size/3;
 		uint16_t* GREEN  = new uint16_t[split_size];
@@ -1029,7 +1064,8 @@ int main(int argc, char *argv[]){
 			width,
 			height,
 			8,
-			cruncher_mode
+			cruncher_mode,
+			LEMPEL_NUKE
 		);
 		subtract_green_size += green_size;
 
@@ -1039,7 +1075,8 @@ int main(int argc, char *argv[]){
 			width,
 			height,
 			9,
-			cruncher_mode
+			cruncher_mode,
+			LEMPEL_NUKE
 		);
 
 		subtract_green_size += layer_encode(
@@ -1048,7 +1085,8 @@ int main(int argc, char *argv[]){
 			width,
 			height,
 			9,
-			cruncher_mode
+			cruncher_mode,
+			LEMPEL_NUKE
 		);
 		delete[] GREEN;
 		delete[] RED_G;
@@ -1064,7 +1102,8 @@ int main(int argc, char *argv[]){
 					width,
 					height,
 					8,
-					cruncher_mode
+					cruncher_mode,
+					LEMPEL_NUKE
 				);
 				uint16_t* BLUE = channel_picker(in_bytes, in_size, 3, 2);
 				int blue_size = layer_encode(
@@ -1073,7 +1112,8 @@ int main(int argc, char *argv[]){
 					width,
 					height,
 					8,
-					cruncher_mode
+					cruncher_mode,
+					LEMPEL_NUKE
 				);
 				rgb_size = red_size + green_size + blue_size;
 			}
@@ -1084,7 +1124,8 @@ int main(int argc, char *argv[]){
 					width,
 					height,
 					8,
-					cruncher_mode - 1
+					cruncher_mode - 1,
+					LEMPEL_NUKE
 				);
 				int blue_size = layer_encode(
 					BLUE,
@@ -1092,7 +1133,8 @@ int main(int argc, char *argv[]){
 					width,
 					height,
 					8,
-					cruncher_mode - 1
+					cruncher_mode - 1,
+					LEMPEL_NUKE
 				);
 				rgb_size = red_size + green_size + blue_size;
 			}
@@ -1100,14 +1142,17 @@ int main(int argc, char *argv[]){
 			delete[] BLUE;
 		}
 
-		best_size = subtract_green_size;
-		if(palette_size != -1 && palette_size < best_size){
-			best_size = palette_size;
+		best_size = subtract_green_size + lz_external_overhead;
+		if(palette_size != -1 && palette_size + lz_external_overhead < best_size){
+			best_size = palette_size + lz_external_overhead;
 		}
-		if(rgb_size != -1 && rgb_size < best_size){
-			best_size = rgb_size;
+		if(rgb_size != -1 && rgb_size + lz_external_overhead < best_size){
+			best_size = rgb_size + lz_external_overhead;
 		}
 	}
+
+	delete[] LEMPEL;
+	delete[] LEMPEL_NUKE;
 
 	printf("%d\n",best_size + 8 + 8 + 2 + 3);
 	//printf("Total file size: %d bytes\n",best_size + 8 + 8 + 2 + 3);
