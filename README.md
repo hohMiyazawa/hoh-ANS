@@ -15,11 +15,6 @@ convert input.png -depth 8 rgb:infile.raw
 ```
 Encoded size is reported, but no data is written.
 
-For marginally better compression, but much slower encoding, try:
-```
-hoh infile.raw width height crunch
-```
-
 ## Building
 
 ```
