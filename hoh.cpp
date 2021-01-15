@@ -333,12 +333,14 @@ uint16_t* channelpredict_all(
 			int best_val = centre*2;
 			best_pred[x_m] = 0;
 
-			predictor = tile_map[((y_m + 1)/tile_height) * x_tiles + (x_m/tile_width)];//future row
-			for(int j=0;j<16;j++){
-				int val = std::abs(data[datalocation] - predictions[j]);
-				if(val < best_val && (predictor & (1 << j))){
-					best_val = val;
-					best_pred[x_m] = j;
+			if(y_m + 1 < height){
+				predictor = tile_map[((y_m + 1)/tile_height) * x_tiles + (x_m/tile_width)];//future row
+				for(int j=0;j<16;j++){
+					int val = std::abs(data[datalocation] - predictions[j]);
+					if(val < best_val && (predictor & (1 << j))){
+						best_val = val;
+						best_pred[x_m] = j;
+					}
 				}
 			}
 		}
