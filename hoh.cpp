@@ -13,12 +13,15 @@
 #include "file_io.hpp"
 #include "symbolstats.hpp"
 #include "channel.hpp"
-#include "patches.hpp"
 #include "lz.hpp"
 #include "channel_encode.hpp"
 #include "bitimage.hpp"
 
 uint8_t midpoint(uint8_t a, uint8_t b){
+	return a + (b - a) / 2;
+}
+
+uint16_t midpoint(uint16_t a, uint16_t b){
 	return a + (b - a) / 2;
 }
 
@@ -70,10 +73,6 @@ uint16_t median(uint16_t a, uint16_t b, uint16_t c){
 			return a;
 		}
 	}
-}
-
-uint16_t midpoint(uint16_t a, uint16_t b){
-	return a + (b - a) / 2;
 }
 
 uint8_t average3(uint8_t a, uint8_t b, uint8_t c){

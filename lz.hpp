@@ -3,6 +3,7 @@
 
 #include "channel_encode.hpp"
 
+/*
 int find_lz(
 	uint16_t* source,
 	size_t size,
@@ -122,7 +123,7 @@ int find_lz(
 	//printf("internal lempel %d|%d + %d|%d + %d|%d = %d\n",lz_overhead1,(int)lz_future_size,lz_overhead2,(int)lz_length_size,lz_overhead3,(int)lz_backby_size,lz_overhead1 + lz_overhead2 + lz_overhead3);
 	printf("internal lempel %d\n",best_size);
 	return 1 + best_size;
-}
+}*/
 
 int find_lz_rgb(
 	uint8_t* source,
