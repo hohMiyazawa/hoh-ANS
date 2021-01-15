@@ -122,117 +122,43 @@ uint16_t paeth(uint16_t A,uint16_t B,uint16_t C){
 	}
 }
 
-uint16_t* channelpredict_fastpath(uint8_t* data, size_t size, int width, int height){
-	uint8_t forige = 128;
-	uint8_t forige_TL = 128;
-	uint8_t top_row[width];
-	for(int i=0;i<width;i++){
-		top_row[i] = 128;
-	}
-	uint16_t* out_buf = new uint16_t[size];
-	for (int i=0; i < size; i++){
-		uint8_t L = forige;
-		uint8_t T = top_row[i % width];
-		uint8_t TL = forige_TL;
-		uint8_t predictions = median(T,L,T+L-TL);
-
-		out_buf[i] = data[i] - predictions + 256;
-		forige = data[i];
-		forige_TL = top_row[i % width];
-		top_row[i % width] = data[i];
-	}
-	return out_buf;
-}
-
-uint16_t* channelpredict(uint8_t* data, size_t size, int width, int height, uint32_t predictors){
-	if(predictors == 0b0000000000010000){
-		return channelpredict_fastpath(data, size, width, height);
-	}
-	uint8_t forige = 128;
-	uint8_t forige_TL = 128;
-	int best_pred[width];
-	for(int i=0;i<width;i++){
-		best_pred[i] = 0;
-	}
-	uint8_t top_row[width];
-	for(int i=0;i<width;i++){
-		top_row[i] = 128;
-	}
-	uint16_t* out_buf = new uint16_t[size];
-	for (int i=0; i < size; i++){
-		uint8_t L = forige;
-		uint8_t T = top_row[i % width];
-		uint8_t TL = forige_TL;
-		uint8_t TR = top_row[(i + width + 1) % width];
-		uint8_t predictions[16] = {
-			L,
-			T,
-			TL,
-			TR,
-			median(T,L,T+L-TL),
-			midpoint(L,T),
-			midpoint(L,TL),
-			midpoint(TL,T),
-			midpoint(T,TR),
-			paeth(L,TL,T),
-			average3(L,L,TL),
-			average3(L,TL,TL),
-			average3(TL,TL,T),
-			average3(TL,T,T),
-			average3(T,T,TR),
-			average3(T,TR,TR)
-/*,
-			(L*2 + TL)/3,
-			(L + TL*2)/3,
-			(TL*2 + T)/3,
-			(TL + T*2)/3,
-			(T*2 + TR)/3,
-			(T + TR*2)/3,
-			(L + TL + T + TR)/4,
-			((L + TR)/2 + T)/2*/
-		};
-		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + 256;
-		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + 256;
-		forige = data[i];
-		forige_TL = top_row[i % width];
-		top_row[i % width] = data[i];
-		int best_val = 512;
-		best_pred[i % width] = 0;
-		for(int j=0;j<16;j++){
-			int val = std::abs(data[i] - predictions[j]);
-			if(val < best_val && (predictors & (1 << j))){
-				best_val = val;
-				best_pred[i % width] = j;
-			}
-		}
-	}
-	/*for(size_t i=0;i<size;i++){
-		out_buf[i] = data[i] - forige + 256;
-		forige = data[i];
-	}*/
-	return out_buf;
-}
-
-uint16_t* channelpredict_fastpath(uint16_t* data, size_t size, int width, int height, int depth){
+uint16_t* channelpredict_fastpath(
+	uint16_t* data,
+	size_t size,
+	int width,
+	int height,
+	int depth,
+	size_t* buffer_size
+){
 	int centre = 1<<depth;
+	uint16_t* out_buf = new uint16_t[width*height];
 
-	uint16_t forige = centre/2;
-	uint16_t forige_TL = centre/2;
 	uint16_t top_row[width];
+	uint16_t forige;
+	uint16_t forige_TL;
+
 	for(int i=0;i<width;i++){
 		top_row[i] = centre/2;
 	}
-	uint16_t* out_buf = new uint16_t[size];
-	for (int i=0; i < size; i++){
-		uint16_t L = forige;
-		uint16_t T = top_row[i % width];
-		uint16_t TL = forige_TL;
-		uint16_t predictions = median(T,L,T+L-TL);
-		out_buf[i] = data[i] - predictions + centre;
-		forige = data[i];
-		forige_TL = top_row[i % width];
-		top_row[i % width] = data[i];
+
+	size_t index = 0;
+	for(int y_m=0;y_m < height;y_m++){
+		forige    = centre/2;
+		forige_TL = centre/2;
+		for(int x_m=0;x_m < width;x_m++){
+			int datalocation = y_m*width + x_m;
+			uint16_t L = forige;
+			uint16_t T = top_row[x_m];
+			uint16_t TL = forige_TL;
+
+			out_buf[index++] = data[datalocation] - median(T,L,T+L-TL) + centre;
+
+			forige_TL = top_row[x_m];
+			top_row[x_m] = data[datalocation];
+			forige = data[datalocation];
+		}
 	}
+	*buffer_size = index;
 	return out_buf;
 }
 
@@ -249,6 +175,16 @@ uint16_t* channelpredict_section(
 	uint16_t predictor,
 	size_t* buffer_size
 ){
+	if(predictor == 0b0000000000010000 && x_tiles == 1 && y_tiles == 1 && x == 0 && y == 0){
+		return channelpredict_fastpath(
+			data,
+			size,
+			width,
+			height,
+			depth,
+			buffer_size
+		);
+	}
 	int centre = 1<<depth;
 	int tile_width  = (width  + x_tiles - 1)/x_tiles;
 	int tile_height = (height + y_tiles - 1)/y_tiles;
@@ -350,7 +286,7 @@ uint16_t* channelpredict_all(
 
 	int best_pred[width];
 	for(int i=0;i<width;i++){
-		best_pred[i] = 3;
+		best_pred[i] = 4;
 	}
 
 	uint16_t top_row[width];
@@ -396,79 +332,14 @@ uint16_t* channelpredict_all(
 
 			int best_val = centre*2;
 			best_pred[x_m] = 0;
+
+			predictor = tile_map[((y_m + 1)/tile_height) * x_tiles + (x_m/tile_width)];//future row
 			for(int j=0;j<16;j++){
 				int val = std::abs(data[datalocation] - predictions[j]);
 				if(val < best_val && (predictor & (1 << j))){
 					best_val = val;
 					best_pred[x_m] = j;
 				}
-			}
-		}
-	}
-	return out_buf;
-}
-
-uint16_t* channelpredict(uint16_t* data, size_t size, int width, int height, int depth, uint32_t predictors){
-	if(predictors == 0b0000000000010000){
-		return channelpredict_fastpath(data, size, width, height, depth);
-	}
-	int centre = 1<<depth;
-
-	uint16_t forige = centre/2;
-	uint16_t forige_TL = centre/2;
-	int best_pred[width];
-	for(int i=0;i<width;i++){
-		best_pred[i] = 0;
-	}
-	uint16_t top_row[width];
-	for(int i=0;i<width;i++){
-		top_row[i] = centre/2;
-	}
-	uint16_t* out_buf = new uint16_t[size];
-	for (int i=0; i < size; i++){
-		uint16_t L = forige;
-		uint16_t T = top_row[i % width];
-		uint16_t TL = forige_TL;
-		uint16_t TR = top_row[(i + width + 1) % width];
-		uint16_t predictions[16] = {
-			L,
-			T,
-			TL,
-			TR,
-			median(T,L,T+L-TL),
-			midpoint(L,T),
-			midpoint(L,TL),
-			midpoint(TL,T),
-			midpoint(T,TR),
-			paeth(L,TL,T),
-			average3(L,L,TL),
-			average3(L,TL,TL),
-			average3(TL,TL,T),
-			average3(TL,T,T),
-			average3(T,T,TR),
-			average3(T,TR,TR)
-/*,
-			(L*2 + TL)/3,
-			(L + TL*2)/3,
-			(TL*2 + T)/3,
-			(TL + T*2)/3,
-			(T*2 + TR)/3,
-			(T + TR*2)/3,
-			(L + TL + T + TR)/4,
-			((L + TR)/2 + T)/2*/
-		};
-		//out_buf[i] = data[i] - predictions[best_pred[i % width]] + centre;
-		out_buf[i] = data[i] - midpoint(predictions[best_pred[i % width]],predictions[best_pred[(i + width - 1) % width]]) + centre;
-		forige = data[i];
-		forige_TL = top_row[i % width];
-		top_row[i % width] = data[i];
-		int best_val = centre*2;
-		best_pred[i % width] = 0;
-		for(int j=0;j<16;j++){
-			int val = std::abs(data[i] - predictions[j]);
-			if(val < best_val && (predictors & (1 << j))){
-				best_val = val;
-				best_pred[i % width] = j;
 			}
 		}
 	}
@@ -491,7 +362,6 @@ int layer_encode(
 	uint32_t* dummy1;
 	uint32_t* dummy2;
 	uint32_t* dummy3;
-	int lz_used = 0;
 
 	size_t chunk_size;
 
@@ -508,84 +378,9 @@ int layer_encode(
 		0b0000000000010000,
 		&chunk_size
 	);
-	int channel_size = channel_encode(
-		predict,
-		size,
-		depth + 1,
-		prob_bits,
-		dummy1,
-		dummy2,
-		dummy3
-	);
-	if(channel_size < possible_size){
-		possible_size = channel_size;
-	}
 
-	int lz_overhead = 0;//change later
 	uint16_t* predict_cleaned;
 	size_t cleaned_pointer;
-	int channel_size_lz;
-/*
-	size_t LEMPEL_SIZE;
-	uint8_t* LEMPEL;
-	uint8_t* LEMPEL_NUKE;
-	LEMPEL = new uint8_t[size];
-	LEMPEL_NUKE = new uint8_t[size];
-	for(int i=0;i<size;i++){
-		LEMPEL_NUKE[i] = 0;
-	}
-
-	if(cruncher_mode == 0){
-		lz_overhead = find_lz(
-			data,
-			size,
-			LEMPEL,
-			&LEMPEL_SIZE,
-			LEMPEL_NUKE,
-			5
-		);
-	}
-	else if(cruncher_mode == 1){
-		lz_overhead = find_lz(
-			data,
-			size,
-			LEMPEL,
-			&LEMPEL_SIZE,
-			LEMPEL_NUKE,
-			6
-		);
-	}
-	else if(cruncher_mode == 2){
-		lz_overhead = find_lz(
-			data,
-			size,
-			LEMPEL,
-			&LEMPEL_SIZE,
-			LEMPEL_NUKE,
-			8
-		);
-	}
-	else if(cruncher_mode == 3){
-		lz_overhead = find_lz(
-			data,
-			size,
-			LEMPEL,
-			&LEMPEL_SIZE,
-			LEMPEL_NUKE,
-			11
-		);
-	}
-	else{
-		lz_overhead = find_lz(
-			data,
-			size,
-			LEMPEL,
-			&LEMPEL_SIZE,
-			LEMPEL_NUKE,
-			14
-		);
-	}
-*/
 
 	predict_cleaned = new uint16_t[size];
 	cleaned_pointer = 0;
@@ -595,7 +390,7 @@ int layer_encode(
 		}
 	}
 
-	channel_size_lz = channel_encode(
+	int channel_size_lz = channel_encode(
 		predict_cleaned,
 		cleaned_pointer,
 		depth + 1,
@@ -605,9 +400,8 @@ int layer_encode(
 		dummy3
 	);
 
-	if(channel_size_lz + lz_overhead < possible_size){
-		possible_size = channel_size_lz + lz_overhead;
-		lz_used = 1;
+	if(channel_size_lz < possible_size){
+		possible_size = channel_size_lz;
 	}
 
 	int total_tiles = 1;
@@ -703,7 +497,7 @@ int layer_encode(
 			y_tiles,
 			predictor_list
 		);
-		if(cruncher_mode > 1){//refine estimate
+		if(cruncher_mode > 2){//refine estimate
 
 			for(int i=0;i < (1<<(depth + 1));i++){
 				freqs[i] = 1;
@@ -764,127 +558,65 @@ int layer_encode(
 				predict_cleaned[cleaned_pointer++] = predict[j];
 			}
 		}
-		if(lz_used){
-			int temp_size1 = channel_encode(
-				predict_cleaned,
-				cleaned_pointer,
-				depth + 1,
-				16,
-				dummy1,
-				dummy2,
-				dummy3
-			) + lz_overhead;
-			int temp_size2 = channel_encode(
-				predict_cleaned,
-				cleaned_pointer,
-				depth + 1,
-				15,
-				dummy1,
-				dummy2,
-				dummy3
-			) + lz_overhead;
-			if(temp_size1 < temp_size2){
-				if(temp_size1 < possible_size){
-					possible_size = temp_size1;
-				}
-				for(uint32_t i=17;i < 20;i++){
-					temp_size = channel_encode(
-						predict_cleaned,
-						cleaned_pointer,
-						depth + 1,
-						i,
-						dummy1,
-						dummy2,
-						dummy3
-					) + lz_overhead;
-					if(temp_size < possible_size){
-						possible_size = temp_size;
-					}
-				}
+		int temp_size1 = channel_encode(
+			predict_cleaned,
+			cleaned_pointer,
+			depth + 1,
+			16,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+		int temp_size2 = channel_encode(
+			predict_cleaned,
+			cleaned_pointer,
+			depth + 1,
+			15,
+			dummy1,
+			dummy2,
+			dummy3
+		);
+		if(temp_size1 < temp_size2){
+			if(temp_size1 < possible_size){
+				possible_size = temp_size1;
 			}
-			else{
-				if(temp_size2 < possible_size){
-					possible_size = temp_size2;
-				}
-				for(uint32_t i=14;i > 11;i--){
-					temp_size = channel_encode(
-						predict_cleaned,
-						cleaned_pointer,
-						depth + 1,
-						i,
-						dummy1,
-						dummy2,
-						dummy3
-					) + lz_overhead;
-					if(temp_size < possible_size){
-						possible_size = temp_size;
-					}
+			for(uint32_t i=17;i < 20;i++){
+				temp_size = channel_encode(
+					predict_cleaned,
+					cleaned_pointer,
+					depth + 1,
+					i,
+					dummy1,
+					dummy2,
+					dummy3
+				);
+				if(temp_size < possible_size){
+					possible_size = temp_size;
 				}
 			}
 		}
 		else{
-			int temp_size1 = channel_encode(
-				predict,
-				size,
-				depth + 1,
-				16,
-				dummy1,
-				dummy2,
-				dummy3
-			);
-			int temp_size2 = channel_encode(
-				predict,
-				size,
-				depth + 1,
-				15,
-				dummy1,
-				dummy2,
-				dummy3
-			);
-			if(temp_size1 < temp_size2){
-				if(temp_size1 < possible_size){
-					possible_size = temp_size1;
-				}
-				for(uint32_t i=17;i < 20;i++){
-					temp_size = channel_encode(
-						predict,
-						size,
-						depth + 1,
-						i,
-						dummy1,
-						dummy2,
-						dummy3
-					);
-					if(temp_size < possible_size){
-						possible_size = temp_size;
-					}
-				}
+			if(temp_size2 < possible_size){
+				possible_size = temp_size2;
 			}
-			else{
-				if(temp_size2 < possible_size){
-					possible_size = temp_size2;
-				}
-				for(uint32_t i=14;i > 11;i--){
-					temp_size = channel_encode(
-						predict,
-						size,
-						depth + 1,
-						i,
-						dummy1,
-						dummy2,
-						dummy3
-					);
-					if(temp_size < possible_size){
-						possible_size = temp_size;
-					}
+			for(uint32_t i=14;i > 11;i--){
+				temp_size = channel_encode(
+					predict_cleaned,
+					cleaned_pointer,
+					depth + 1,
+					i,
+					dummy1,
+					dummy2,
+					dummy3
+				);
+				if(temp_size < possible_size){
+					possible_size = temp_size;
 				}
 			}
 		}
 	}
 
 	delete[] predict;
-	//delete[] LEMPEL;
-	//delete[] LEMPEL_NUKE;
 	delete[] predict_cleaned;
 
 	return possible_size + 1 + tile_cost;
@@ -1024,7 +756,7 @@ int main(int argc, char *argv[]){
 	}
 	size_t lz_symbol_size;
 
-	int seek_distance = 8;
+	int seek_distance = 6;
 	if(cruncher_mode == 1){
 		seek_distance = 10;
 	}
