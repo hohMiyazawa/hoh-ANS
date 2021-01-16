@@ -11,6 +11,7 @@ TODO
 		2: rgb
 		3: greyscale + alpha
 		4: rgb + alpha
+		127: indexed
 		128: subtract green
 		129: YIQ reversible
 		130: subtract green + alpha

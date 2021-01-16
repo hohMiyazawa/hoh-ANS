@@ -36,14 +36,84 @@ void print_usage(){
 	255: unknown error
 */
 int read_varint(uint8_t* bytes, int* location){//incorrect implentation! only works up to 16383!
-	uint8_t first_byte = bytes[*location++];
+	uint8_t first_byte = bytes[*location];
+	*location = *location + 1;
 	if(first_byte & (1<<7)){
 		uint8_t second_byte = bytes[*location++];
+		*location = *location + 1;
 		return (((int)first_byte & 0b01111111) << 7) + second_byte;
 	}
 	else{
 		return (int)first_byte;
 	}
+}
+
+uint8_t* decode_tile(
+	uint8_t* in_bytes,
+	size_t in_size,
+	int byte_pointer,
+	uint8_t pixel_format,
+	uint8_t bit_depth,
+	int width,
+	int height
+){
+	uint8_t x_tiles = in_bytes[byte_pointer++] + 1;
+	uint8_t y_tiles = in_bytes[byte_pointer++] + 1;
+
+	uint8_t* decoded;
+
+	if(x_tiles != 1 || y_tiles != 1){
+		printf("tiled image: %dx%d\n",(int)x_tiles,(int)y_tiles);
+		printf("tile offset 0: 0\n");
+		for(int i=1;i<x_tiles*y_tiles;i++){
+			printf("tile offset %d: %d\n",i,read_varint(in_bytes, &byte_pointer));
+		}
+	}
+	else{
+		printf("single tile image\n");
+	}
+	if(bit_depth > 8){
+		printf("high bit depth not implemented!\n");
+	}
+	uint8_t pixel_format_internal = in_bytes[byte_pointer++];
+	if(pixel_format == 0){
+		printf("internal pixel format: bit\n");
+	}
+	else if(pixel_format_internal == 1){
+		printf("internal pixel format: greyscale\n");
+	}
+	else if(pixel_format_internal == 2){
+		printf("internal pixel format: rgb\n");
+	}
+	else if(pixel_format_internal == 3){
+		printf("internal pixel format: greyscale + alpha\n");
+	}
+	else if(pixel_format_internal == 4){
+		printf("internal pixel format: rgb + alpha\n");
+	}
+	else if(pixel_format_internal == 127){
+		printf("internal pixel format: indexed\n");
+		int index_size = read_varint(in_bytes, &byte_pointer);
+	}
+	else if(pixel_format_internal == 128){
+		printf("internal pixel format: subgreen\n");
+	}
+	else if(pixel_format_internal == 129){
+		printf("internal pixel format: YIQ\n");
+	}
+	else if(pixel_format_internal == 130){
+		printf("internal pixel format: subgreen + alpha\n");
+	}
+	else if(pixel_format_internal == 131){
+		printf("internal pixel format: YIQ + alpha\n");
+	}
+	else if(pixel_format_internal == 255){
+		printf("invalid internal pixel format!\n");
+	}
+	else{
+		printf("unknown pixel format!\n");
+	}
+	return decoded;
 }
 
 int main(int argc, char *argv[]){
@@ -78,6 +148,15 @@ int main(int argc, char *argv[]){
 		printf("not a valid hoh file!\n");
 		return 4;
 	}
+		printf("byte %d\n",(int)in_bytes[byte_pointer]);
+		printf("byte %d\n",(int)in_bytes[byte_pointer + 1]);
+
+		printf("byte %d\n",(int)in_bytes[byte_pointer + 2]);
+		printf("byte %d\n",(int)in_bytes[byte_pointer + 3]);
+
+		printf("byte %d\n",(int)in_bytes[byte_pointer + 4]);
+		printf("byte %d\n",(int)in_bytes[byte_pointer + 5]);
+
 	uint8_t pixel_format = in_bytes[byte_pointer++];
 	if(pixel_format == 0){
 		printf("pixel format: bit\n");
@@ -118,57 +197,19 @@ int main(int argc, char *argv[]){
 		}
 		else{
 			//write blank image
+			printf("Parsing ended. Writing blank image not implemented!\n");
 			return 5;
 		}
 	}
-	uint8_t x_tiles = in_bytes[byte_pointer++] + 1;
-	uint8_t y_tiles = in_bytes[byte_pointer++] + 1;
-	if(x_tiles != 1 || y_tiles != 1){
-		printf("tiled image: %dx%d\n",(int)x_tiles,(int)y_tiles);
-		printf("tile offset 0: 0\n");
-		for(int i=1;i<x_tiles*y_tiles;i++){
-			printf("tile offset %d: %d\n",i,read_varint(in_bytes, &byte_pointer));
-		}
-	}
-	else{
-		printf("single tile image\n");
-	}
-	uint8_t pixel_format_internal = in_bytes[byte_pointer++];
-	if(pixel_format == 0){
-		printf("pixel format: bit\n");
-	}
-	else if(pixel_format_internal == 1){
-		printf("pixel format: greyscale\n");
-	}
-	else if(pixel_format_internal == 2){
-		printf("pixel format: rgb\n");
-	}
-	else if(pixel_format_internal == 3){
-		printf("pixel format: greyscale + alpha\n");
-	}
-	else if(pixel_format_internal == 4){
-		printf("pixel format: rgb + alpha\n");
-	}
-	else if(pixel_format_internal == 128){
-		printf("pixel format: subgreen\n");
-	}
-	else if(pixel_format_internal == 129){
-		printf("pixel format: YIQ\n");
-	}
-	else if(pixel_format_internal == 130){
-		printf("pixel format: subgreen + alpha\n");
-	}
-	else if(pixel_format_internal == 131){
-		printf("pixel format: YIQ + alpha\n");
-	}
-	else if(pixel_format_internal == 255){
-		printf("invalid pixel format!\n");
-		return 4;
-	}
-	else{
-		printf("unknown pixel format!\n");
-		return 5;
-	}
+	uint8_t* decoded = decode_tile(
+		in_bytes,
+		in_size,
+		byte_pointer,
+		pixel_format,
+		bit_depth,
+		width,
+		height
+	);
 
 	delete[] in_bytes;
 
