@@ -1,0 +1,61 @@
+TODO
+
+# Header
+---
+1 byte, magic number 153
+3 bytes, "HOH"
+1 byte, pixel format
+	pixel formats:
+		0: bitimage
+		1: greyscale
+		2: rgb
+		3: greyscale + alpha
+		4: rgb + alpha
+		more formats TBD (YCbCr?)
+	
+1 byte, depth
+varint, width-1
+varint, height-1
+---
+
+header notes:
+	- when multiple planes exists, the order is alpha > green > red > blue
+	- for "0", no image data is stored, it's still a valid image
+	- there's no arbitrary metadata. This is not a complete image format, and should be wrapped.
+	- reading the first 16 bytes should give all header information, unless the image is billions of pixels wide and high.
+
+# global transforms
+1 byte, image tiles x-1
+1 byte, image tiles y-1
+[offsets, if not 1x1]
+1 byte, indicating internal pixel format
+[palette, if indexed]
+	varint palette length
+	1 byte, storage mode
+	[palette]
+channel reordering
+1 byte, indicating a Lempel-Ziv transform, and which variant
+[Lempel-Ziv data]
+varints to offset to all channels from the previous after the first one
+
+# channel transforms
+1 byte, colour compaction, prediction, entropy coding
+[colour compaction]
+	1 byte, compaction mode
+		bitmask
+		clamping ON
+		clamping OFF
+		pointers ON
+		pointers OFF
+		laplace coded deltas
+		
+[prediction]}
+	1 byte x_tiles
+	1 byte y_tiles
+	subchannel prediction tiles
+[entropy coding]
+	rANS
+		rygrans64
+	store
+		minimum number of bits to store depth (or compacted depth)
+		exception: 3 values can be stored 5 pixels to 8bits

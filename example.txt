@@ -1,0 +1,41 @@
+93	magic number 153
+48	H
+4f	O
+48	H
+02	RGB
+08	depth
+01	width 2
+01	height 2
+00	1 tile wide
+00	1 tile high
+02	RGB internal
+24	Default GRB order
+00	no Lempel-Ziv
+00	no transforms for G
+00ffff00	green data
+00	no transforms for R
+ff00ff00	red data
+00	no transforms for B
+000000ff	blue data
+
+alternative (shorter) representation, using lower depth
+
+93	magic number 153
+48	H
+4f	O
+48	H
+02	RGB
+01	depth
+01	width 2
+01	height 2
+00	1 tile wide
+00	1 tile high
+02	RGB internal
+24	Default GRB order
+00	no Lempel-Ziv
+00	no transforms for G
+60	green data
+00	no transforms for R
+a0	red data
+00	no transforms for B
+10	blue data
