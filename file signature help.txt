@@ -1,0 +1,19 @@
+general: hoh files are at least 8 bytes long
+general: hoh files are at least 15 bytes long if the sixth byte is not 00
+
+hoh files will always star with the four bytes:
+93 48 4f 48
+
+the fifth byte can be any value, EXCEPT:
+ff
+common values for the fifth byte:
+00, 01, 02, 03 or 04
+
+the sixth byte can, when the fifth is 00, only be 00 or 01.
+common values for the sixth byte:
+00, 01, 02, 04, 08, 0a, 0c, 10 or 20
+
+common values for the seventh byte:
+1f, 3f, 80, 81, 84, 89, 8b or 8e
+
+The high bit of the eight byte is usually not set

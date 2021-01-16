@@ -1,4 +1,4 @@
-93	magic number 153
+99	magic number 153
 48	H
 4f	O
 48	H
@@ -20,7 +20,7 @@ ff00ff00	red data
 
 alternative (shorter) representation, using lower depth
 
-93	magic number 153
+99	magic number 153
 48	H
 4f	O
 48	H
