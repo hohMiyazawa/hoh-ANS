@@ -2,7 +2,7 @@ general: hoh files are at least 8 bytes long
 general: hoh files are at least 15 bytes long if the sixth byte is not 00
 
 hoh files will always star with the four bytes:
-93 48 4f 48
+99 48 4f 48
 
 the fifth byte can be any value, EXCEPT:
 ff

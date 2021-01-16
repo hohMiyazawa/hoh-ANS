@@ -35,9 +35,11 @@ void print_usage(){
 	7: terminated before completion
 	255: unknown error
 */
+int read_varint(uint8_t* bytes, int* location){
+	return bytes[*location++];//incorrect implentation! only works up to 127
+}
 
 int main(int argc, char *argv[]){
-	printf("Not ready for actual usage!\n");
 	if(argc == 2 && (strcmp(argv[1],"--help") == 0 || strcmp(argv[1],"-h") == 0)){
 		print_usage();
 		return 0;//technically everything went OK
@@ -93,7 +95,24 @@ int main(int argc, char *argv[]){
 		printf("unknown pixel format!\n");
 		return 5;
 	}
+	uint8_t bit_depth = in_bytes[byte_pointer++];
+	if(pixel_format == 0 && !(bit_depth == 0 || bit_depth == 1)){
+		printf("invalid bitstream!\n");
+		return 4;
+	}
+	printf("bit depth: %d\n",(int)bit_depth);
+	int width = read_varint(in_bytes, &byte_pointer) + 1;
+	int height = read_varint(in_bytes, &byte_pointer) + 1;
+	printf("dimensions: %dx%d\n",width,height);
+	if(bit_depth == 0){
+		if(byte_pointer < in_size){
+			printf("invalid bitstream!\n");
+			return 4;
+		}
+	}
 
 	delete[] in_bytes;
-	return 0;
+
+	printf("Parsing ended. Decoding not completely implemented!\n");
+	return 5;//not implemented status
 }
