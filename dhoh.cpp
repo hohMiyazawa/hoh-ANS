@@ -7,7 +7,6 @@
 
 #include "rans64.hpp"
 #include "file_io.hpp"
-#include "symbolstats.hpp"
 #include "channel.hpp"
 #include "bitimage.hpp"
 
@@ -17,29 +16,79 @@ void print_usage(){
 	printf("You can turn that into an image with imagemagick:\n");
 	printf("[TODO: imagemagick command]\n");
 }
-/*
-	return values:
-	0: OK
-	1: CLI error
-	2: I/O error
-	3: unexpected end of file
-	4: incorrect bitstream
-	5: not implemented
-	6: resources exhausted
-	7: terminated before completion
-	255: unknown error
-*/
-int read_varint(uint8_t* bytes, int* location){//incorrect implentation! only works up to 16383!
+
+int read_varint(uint8_t* bytes, int* location){//incorrect implentation! only works up to three bytes/21bit numbers!
 	uint8_t first_byte = bytes[*location];
 	*location = *location + 1;
 	if(first_byte & (1<<7)){
-		uint8_t second_byte = bytes[*location++];
+		uint8_t second_byte = bytes[*location];
 		*location = *location + 1;
-		return (((int)first_byte & 0b01111111) << 7) + second_byte;
+		if(second_byte & (1<<7)){
+			uint8_t third_byte = bytes[*location];
+			*location = *location + 1;
+			return (((int)first_byte & 0b01111111) << 14) + (((int)second_byte & 0b01111111) << 7) + third_byte;
+		}
+		else{
+			return (((int)first_byte & 0b01111111) << 7) + second_byte;
+		}
 	}
 	else{
 		return (int)first_byte;
 	}
+}
+
+uint16_t* decode_rans(
+	uint8_t* in_bytes,
+	size_t in_size,
+	int byte_pointer,
+	int symbol_size
+){
+	int symbol_range = read_varint(in_bytes, &byte_pointer);
+	uint8_t metadata = in_bytes[byte_pointer++];
+	uint8_t prob_bits = metadata>>4;
+	uint8_t storage_mode = metadata % (1<<4);
+
+	uint32_t freqs[symbol_range];
+	uint32_t cum_freqs[symbol_range + 1];
+	Rans64DecSymbol dsyms[symbol_range];
+
+	if(storage_mode == 0){
+		for(int i=0;i<symbol_range;i++){
+			freqs[i] = 1;
+		}
+	}
+	else if(storage_mode == 1){
+	}
+	else if(storage_mode == 2){
+	}
+	else if(storage_mode == 3){
+	}
+	else{
+		printf("unknown frequency table storage mode!\n");
+	}
+	int data_size = read_varint(in_bytes, &byte_pointer);
+	for(int i=0; i < symbol_range; i++) {
+		Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);
+	}
+	uint16_t cum2sym[1<<prob_bits];
+	for(int s=0; s < symbol_range; s++){
+		for(uint32_t i=cum_freqs[s]; i < cum_freqs[s+1]; i++){
+	   		 cum2sym[i] = s;
+		}
+	}
+
+        Rans64State rans;
+        uint32_t* ptr = (uint32_t*)(in_bytes + byte_pointer);
+        Rans64DecInit(&rans, &ptr);
+	
+	uint16_t* decoded = new uint16_t[symbol_size];
+
+	for(size_t i=0; i < symbol_size; i++) {
+		uint32_t s = cum2sym[Rans64DecGet(&rans, prob_bits)];
+		decoded[i] = (uint16_t) s;
+		Rans64DecAdvanceSymbol(&rans, &ptr, &dsyms[s], prob_bits);
+	}
+	return decoded;
 }
 
 uint8_t* decode_channel(
@@ -289,6 +338,18 @@ uint8_t* decode_tile(
 	return decoded;
 }
 
+/*
+	return values:
+	0: OK
+	1: CLI error
+	2: I/O error
+	3: unexpected end of file
+	4: incorrect bitstream
+	5: not implemented
+	6: resources exhausted
+	7: terminated before completion
+	255: unknown error
+*/
 int main(int argc, char *argv[]){
 	if(argc == 2 && (strcmp(argv[1],"--help") == 0 || strcmp(argv[1],"-h") == 0)){
 		print_usage();

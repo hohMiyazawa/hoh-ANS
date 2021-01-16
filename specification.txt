@@ -65,3 +65,14 @@ varints of offsets to all channels from the previous after the first one. (may b
 	store
 		minimum number of bits to store depth (or compacted depth)
 		exception: 3 values can be stored 5 pixels to 8bits
+
+rANS structure:
+varint, symbol range
+1 byte (4 upper bits), precision bits
+1 byte (4 lower bits), storage mode
+	0: uniform probability(?)
+	1: raw values for freqs
+	2: [pairs of clamps up to relevant size, for bits 1 and every 4n]
+	3: 1 byte laplace deviation
+varint, rANS data length
+[rANS data]
