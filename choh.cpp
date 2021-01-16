@@ -705,11 +705,11 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 }
 
 void print_usage(){
-	printf("usage: hoh infile.raw width height -sN\n");
+	printf("usage: choh infile.rgb width height -sN\n");
 	printf("where N is a number 0-3(fast-slow). Default value 1.\n\n");
 	printf("The input file must consist of raw 8bit RGB bytes\n");
 	printf("You can make such a file with imagemagick:\n");
-	printf("convert input.png -depth 8 rgb:infile.raw\n\n");
+	printf("convert input.png -depth 8 rgb:infile.rgb\n\n");
 	printf("Output will at present not be written because file IO is tedious\n");
 }
 
