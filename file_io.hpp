@@ -21,6 +21,12 @@ static void write_file(char const* filename, uint32_t* start, uint32_t* end){
 	outfile.close();
 }
 
+static void write_file(char const* filename, uint8_t* start, size_t size){
+	std::ofstream file(filename,std::ofstream::binary);
+	file.write((char*)start, size);
+	file.close();
+}
+
 static uint8_t* read_file(char const* filename, size_t* out_size){
 	FILE* f = fopen(filename, "rb");
 	if (!f){

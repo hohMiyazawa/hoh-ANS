@@ -9,8 +9,10 @@
 00	1 tile wide
 00	1 tile high
 02	RGB internal
-24	Default GRB order
 00	no Lempel-Ziv
+24	Default GRB order
+05	offset to R
+05	offset to B
 00	no transforms for G
 00ffff00	green data
 00	no transforms for R
@@ -31,8 +33,10 @@ alternative (shorter) representation, using lower depth
 00	1 tile wide
 00	1 tile high
 02	RGB internal
-24	Default GRB order
 00	no Lempel-Ziv
+24	Default GRB order
+02	offset to R
+02	offset to B
 00	no transforms for G
 60	green data
 00	no transforms for R

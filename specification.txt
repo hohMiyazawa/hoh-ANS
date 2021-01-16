@@ -39,10 +39,10 @@ header notes:
 	varint palette length
 	1 byte, storage mode
 	[palette]
-channel reordering
 1 byte, indicating a Lempel-Ziv transform, and which variant
 [Lempel-Ziv data]
-varints of offsets to all channels from the previous after the first one
+channel reordering (only if >1 channels)
+varints of offsets to all channels from the previous after the first one. (may be less if conjoined channels)
 
 # channel transforms
 1 byte, colour compaction, prediction, entropy coding
