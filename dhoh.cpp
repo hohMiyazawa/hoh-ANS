@@ -5,16 +5,10 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <cstdlib>
-#include <cmath>
-#include <math.h>
-
 #include "rans64.hpp"
 #include "file_io.hpp"
 #include "symbolstats.hpp"
 #include "channel.hpp"
-#include "lz.hpp"
-#include "channel_encode.hpp"
 #include "bitimage.hpp"
 
 void print_usage(){
