@@ -1,6 +1,7 @@
 #ifndef CHANNEL_ENCODE_HEADER
 #define CHANNEL_ENCODE_HEADER
 
+#include "rans64.hpp"
 
 int ranscode_symbols_256(
 	uint8_t* symbols,

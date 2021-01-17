@@ -11,13 +11,22 @@
 02	RGB internal
 00	no Lempel-Ziv
 24	Default GRB order
-05	offset to R
-05	offset to B
+09	offset to R
+09	offset to B
 00	no transforms for G
+817f	range of symbols
+03	number of symbols
+00	store
 00ffff00	green data
 00	no transforms for R
+817f	range of symbols
+03	number of symbols
+00	store
 ff00ff00	red data
 00	no transforms for B
+817f	range of symbols
+03	number of symbols
+00	store
 000000ff	blue data
 
 alternative (shorter) representation, using lower depth
@@ -35,11 +44,20 @@ alternative (shorter) representation, using lower depth
 02	RGB internal
 00	no Lempel-Ziv
 24	Default GRB order
-02	offset to R
-02	offset to B
+05	offset to R
+05	offset to B
 00	no transforms for G
+01	range of symbols
+03	number of symbols
+00	store
 60	green data
 00	no transforms for R
+01	range of symbols
+03	number of symbols
+00	store
 a0	red data
 00	no transforms for B
+01	range of symbols
+03	number of symbols
+00	store
 10	blue data

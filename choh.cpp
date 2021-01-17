@@ -9,26 +9,14 @@
 #include <cmath>
 #include <math.h>
 
-#include "rans64.hpp"
+#include "varint.hpp"
 #include "file_io.hpp"
 #include "symbolstats.hpp"
 #include "channel.hpp"
 #include "lz.hpp"
 #include "channel_encode.hpp"
 #include "bitimage.hpp"
-
-void write_varint(uint8_t* bytes, size_t* location, int value){//must be improved
-	if(value < 128){
-		bytes[*location] = (uint8_t)value;
-		*location = *location + 1;
-	}
-	else if(value < (1<<13)){
-		bytes[*location] = (uint8_t)((value>>7) + 128);
-		*location = *location + 1;
-		bytes[*location] = (uint8_t)(value % 128);
-		*location = *location + 1;
-	}
-}
+#include "entropy_encoding.hpp"
 
 uint8_t midpoint(uint8_t a, uint8_t b){
 	return a + (b - a) / 2;
@@ -839,6 +827,7 @@ int main(int argc, char *argv[]){
 	);
 
 	int best_size;
+	int internal_colour_mode = 2;//rgb default
 	if(grey_test(in_bytes, in_size)){
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
 		if(binary_test(binary, in_size/3)){
@@ -850,9 +839,8 @@ int main(int argc, char *argv[]){
 				width,
 				height
 			);
-			if(bit_size < best_size){
-				best_size = bit_size;
-			}
+			best_size = bit_size;
+			internal_colour_mode = 0;//bitimage
 		}
 		else{
 			//TODO 8bit for less memory usage
@@ -866,6 +854,7 @@ int main(int argc, char *argv[]){
 				cruncher_mode,
 				LEMPEL_NUKE
 			) + lz_external_overhead;
+			internal_colour_mode = 1;//greyscale
 			delete[] GREY;
 		}
 	}
@@ -967,13 +956,26 @@ int main(int argc, char *argv[]){
 		}
 
 		best_size = subtract_green_size + lz_external_overhead;
+		internal_colour_mode = 128;//sub_green
 		if(palette_size != -1 && palette_size + lz_external_overhead < best_size){
 			best_size = palette_size + lz_external_overhead;
+			internal_colour_mode = 127;//indexed
 		}
 		if(rgb_size != -1 && rgb_size + lz_external_overhead < best_size){
 			best_size = rgb_size + lz_external_overhead;
+			internal_colour_mode = 2;//rgb
 		}
 	}
+	out_buf[out_start++] = internal_colour_mode;
+	uint8_t use_lempel = 1;
+	uint8_t l_z_backref = 1;
+	if(cruncher_mode == 0){
+		l_z_backref = 0;
+	}
+	uint8_t l_z_bulk = 0;//not really true
+	uint8_t l_z_rans = 1;
+	out_buf[out_start++] = use_lempel + (l_z_backref<<1) + (l_z_bulk<<2) + (l_z_rans<<3);
+	
 
 	delete[] LEMPEL;
 	delete[] LEMPEL_NUKE;

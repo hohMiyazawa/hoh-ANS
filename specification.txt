@@ -40,12 +40,17 @@ header notes:
 	1 byte, storage mode
 	[palette]
 1 byte, indicating a Lempel-Ziv transform, and which variant
+	last bit: lempel-ziv yes/no
+	bit2: 0(1 byte backref), 1(2 byte backref)
+	bit3: joined channels 1yes, 0no
+	bit4: rans encoded 1yes, 0no-
+	
 [Lempel-Ziv data]
 channel reordering (only if >1 channels)
 varints of offsets to all channels from the previous after the first one. (may be less if conjoined channels)
 
 # channel transforms
-1 byte, colour compaction, prediction, entropy coding
+1 byte, colour compaction, prediction
 [colour compaction]
 	(3bits) reasonable combos:
 		NONE
@@ -62,21 +67,22 @@ varints of offsets to all channels from the previous after the first one. (may b
 	1 byte x_tiles
 	1 byte y_tiles
 	subchannel prediction tiles
-[entropy coding]
-	(4bits?)
-	rANS
-		rygrans64
-	store
+
+entropy structure:
+varint, symbol range-1
+varint, symbol number-1
+1 byte (highest bit)
+	0:store
 		minimum number of bits to store depth (or compacted depth)
 		exception: 3 values can be stored 5 pixels to 8bits
-
-rANS structure:
-varint, symbol range
-1 byte (4 upper bits), precision bits
-1 byte (4 lower bits), storage mode
+	1:rANS
+1 byte (second highest bit) RESERVED
+1 byte (4 next bits), precision bits
+1 byte (2 lowest bits), table storage mode
 	0: uniform probability(?)
 	1: raw values for freqs
 	2: [pairs of clamps up to relevant size, for bits 1 and every 4n]
 	3: 1 byte laplace deviation
+[table data]
 varint, rANS data length
 [rANS data]

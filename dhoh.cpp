@@ -5,10 +5,11 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "rans64.hpp"
+#include "varint.hpp"
 #include "file_io.hpp"
 #include "channel.hpp"
 #include "bitimage.hpp"
+#include "entropy_decoding.hpp"
 
 void print_usage(){
 	printf("usage: dhoh infile.hoh outfile.rgb\n");
@@ -17,93 +18,19 @@ void print_usage(){
 	printf("[TODO: imagemagick command]\n");
 }
 
-int read_varint(uint8_t* bytes, int* location){//incorrect implentation! only works up to three bytes/21bit numbers!
-	uint8_t first_byte = bytes[*location];
-	*location = *location + 1;
-	if(first_byte & (1<<7)){
-		uint8_t second_byte = bytes[*location];
-		*location = *location + 1;
-		if(second_byte & (1<<7)){
-			uint8_t third_byte = bytes[*location];
-			*location = *location + 1;
-			return (((int)first_byte & 0b01111111) << 14) + (((int)second_byte & 0b01111111) << 7) + third_byte;
-		}
-		else{
-			return (((int)first_byte & 0b01111111) << 7) + second_byte;
-		}
-	}
-	else{
-		return (int)first_byte;
-	}
-}
-
-uint16_t* decode_rans(
-	uint8_t* in_bytes,
-	size_t in_size,
-	int byte_pointer,
-	int symbol_size
-){
-	int symbol_range = read_varint(in_bytes, &byte_pointer);
-	uint8_t metadata = in_bytes[byte_pointer++];
-	uint8_t prob_bits = metadata>>4;
-	uint8_t storage_mode = metadata % (1<<4);
-
-	uint32_t freqs[symbol_range];
-	uint32_t cum_freqs[symbol_range + 1];
-	Rans64DecSymbol dsyms[symbol_range];
-
-	if(storage_mode == 0){
-		for(int i=0;i<symbol_range;i++){
-			freqs[i] = 1;
-		}
-	}
-	else if(storage_mode == 1){
-	}
-	else if(storage_mode == 2){
-	}
-	else if(storage_mode == 3){
-	}
-	else{
-		printf("unknown frequency table storage mode!\n");
-	}
-	int data_size = read_varint(in_bytes, &byte_pointer);
-	for(int i=0; i < symbol_range; i++) {
-		Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);
-	}
-	uint16_t cum2sym[1<<prob_bits];
-	for(int s=0; s < symbol_range; s++){
-		for(uint32_t i=cum_freqs[s]; i < cum_freqs[s+1]; i++){
-	   		 cum2sym[i] = s;
-		}
-	}
-
-        Rans64State rans;
-        uint32_t* ptr = (uint32_t*)(in_bytes + byte_pointer);
-        Rans64DecInit(&rans, &ptr);
-	
-	uint16_t* decoded = new uint16_t[symbol_size];
-
-	for(size_t i=0; i < symbol_size; i++) {
-		uint32_t s = cum2sym[Rans64DecGet(&rans, prob_bits)];
-		decoded[i] = (uint16_t) s;
-		Rans64DecAdvanceSymbol(&rans, &ptr, &dsyms[s], prob_bits);
-	}
-	return decoded;
-}
-
 uint8_t* decode_channel(
 	uint8_t* in_bytes,
 	size_t in_size,
-	int byte_pointer,
+	size_t byte_pointer,
 	uint8_t pixel_format,
 	uint8_t bit_depth,
-	int width,
-	int height
+	size_t width,
+	size_t height
 ){
 	uint8_t channel_transforms = in_bytes[byte_pointer++];
 	uint8_t compaction_mode = (channel_transforms & 0b11100000)>>5;
 	uint8_t prediction_mode = (channel_transforms & 0b00010000)>>4;
-	uint8_t entropy_mode    = (channel_transforms & 0b00001111);
+
 	uint8_t* decoded = new uint8_t[width*height];
 	uint8_t colour_map[1<<bit_depth];
 	if(compaction_mode == 0){
@@ -163,18 +90,15 @@ uint8_t* decode_channel(
 		printf("unimplemented prediction mode!\n");
 	}
 	else{
-		if(entropy_mode == 0){
-			if(bit_depth == 8){
-				for(int i=0;i<width*height;i++){
-					decoded[i] = in_bytes[byte_pointer++];
-				}
-			}
-			else{
-				printf("unimplemented bit depth!\n");
-			}
-		}
-		else{
-			printf("unimplemented entropy mode!\n");
+		size_t symbol_size;
+		uint16_t* symbols = decode_entropy(
+			in_bytes,
+			in_size,
+			&byte_pointer,
+			&symbol_size
+		);
+		for(int i=0;i<symbol_size;i++){
+			decoded[i] = (uint8_t)symbols[i];
 		}
 	}
 	return decoded;
@@ -183,12 +107,12 @@ uint8_t* decode_channel(
 uint8_t* decode_tile(
 	uint8_t* in_bytes,
 	size_t in_size,
-	int byte_pointer,
+	size_t byte_pointer,
 	uint8_t pixel_format,
 	uint8_t channel_number,
 	uint8_t bit_depth,
-	int width,
-	int height
+	size_t width,
+	size_t height
 ){
 	uint8_t x_tiles = in_bytes[byte_pointer++] + 1;
 	uint8_t y_tiles = in_bytes[byte_pointer++] + 1;
@@ -293,8 +217,33 @@ uint8_t* decode_tile(
 		printf("unknown pixel format!\n");
 	}
 	uint8_t lempel_ziv_mode = in_bytes[byte_pointer++];
-	if(lempel_ziv_mode == 0){
+	uint8_t has_lempel_ziv   = (lempel_ziv_mode & 0b00000001);
+	uint8_t backref_size     = (lempel_ziv_mode & 0b00000010)>>1;
+	uint8_t bundled_channels = (lempel_ziv_mode & 0b00000100)>>2;
+	uint8_t lempel_ziv_rans  = (lempel_ziv_mode & 0b00001000)>>3;
+	if(has_lempel_ziv == 0){
 		printf("no Lempel-Ziv transform\n");
+	}
+	else{
+		printf("Lempel-Ziv transform\n");
+		if(backref_size){
+			printf("  backref: 16bit\n");
+		}
+		else{
+			printf("  backref: 8bit\n");
+		}
+		if(bundled_channels){
+			printf("  bulk: yes\n");
+		}
+		else{
+			printf("  bulk: no\n");
+		}
+		if(lempel_ziv_rans){
+			printf("  rANS: yes\n");
+		}
+		else{
+			printf("  rANS: no\n");
+		}
 	}
 
 	if(channel_number_internal == 1){
@@ -434,7 +383,7 @@ int main(int argc, char *argv[]){
 		printf("not a valid hoh file!\n");
 		return 3;
 	}
-	int byte_pointer = 0;
+	size_t byte_pointer = 0;
 	if(
 		in_bytes[byte_pointer++] != 153
 		|| in_bytes[byte_pointer++] != 72
@@ -479,9 +428,9 @@ int main(int argc, char *argv[]){
 		return 4;
 	}
 	printf("bit depth: %d\n",(int)bit_depth);
-	int width = read_varint(in_bytes, &byte_pointer) + 1;
-	int height = read_varint(in_bytes, &byte_pointer) + 1;
-	printf("dimensions: %dx%d\n",width,height);
+	size_t width = read_varint(in_bytes, &byte_pointer) + 1;
+	size_t height = read_varint(in_bytes, &byte_pointer) + 1;
+	printf("dimensions: %dx%d\n",(int)width,(int)height);
 	if(bit_depth == 0){
 		if(byte_pointer < in_size){
 			printf("file is too large for a blank image!\n");
