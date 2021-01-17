@@ -17,6 +17,19 @@
 #include "channel_encode.hpp"
 #include "bitimage.hpp"
 
+void write_varint(uint8_t* bytes, size_t* location, int value){//must be improved
+	if(value < 128){
+		bytes[*location] = (uint8_t)value;
+		*location = *location + 1;
+	}
+	else if(value < (1<<13)){
+		bytes[*location] = (uint8_t)((value>>7) + 128);
+		*location = *location + 1;
+		bytes[*location] = (uint8_t)(value % 128);
+		*location = *location + 1;
+	}
+}
+
 uint8_t midpoint(uint8_t a, uint8_t b){
 	return a + (b - a) / 2;
 }
@@ -705,7 +718,7 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 }
 
 void print_usage(){
-	printf("usage: choh infile.rgb width height -sN\n");
+	printf("usage: choh infile.rgb outfile.hoh width height -sN\n");
 	printf("where N is a number 0-3(fast-slow). Default value 1.\n\n");
 	printf("The input file must consist of raw 8bit RGB bytes\n");
 	printf("You can make such a file with imagemagick:\n");
@@ -714,38 +727,65 @@ void print_usage(){
 }
 
 int main(int argc, char *argv[]){
-	if(argc < 4){
+	if(argc < 5){
 		printf("not enough arguments\n");
 		print_usage();
 		return 1;
 	}
 
-	int width = atoi(argv[2]);
-	int height = atoi(argv[3]);
+	int width = atoi(argv[3]);
+	int height = atoi(argv[4]);
 	if(width == 0 || height == 0){
 		printf("invalid width or height\n");
 		print_usage();
 		return 2;
 	}
 	int cruncher_mode = 1;
-	if(argc > 4 && strcmp(argv[4],"-s0") == 0){
+	if(argc > 4 && strcmp(argv[5],"-s0") == 0){
 		cruncher_mode = 0;
 	}
-	else if(argc > 4 && strcmp(argv[4],"-s1") == 0){
+	else if(argc > 4 && strcmp(argv[5],"-s1") == 0){
 		cruncher_mode = 1;
 	}
-	else if(argc > 4 && strcmp(argv[4],"-s2") == 0){
+	else if(argc > 4 && strcmp(argv[5],"-s2") == 0){
 		cruncher_mode = 2;
 	}
-	else if(argc > 4 && strcmp(argv[4],"-s3") == 0){
+	else if(argc > 4 && strcmp(argv[5],"-s3") == 0){
 		cruncher_mode = 3;
 	}
-	else if(argc > 4 && strcmp(argv[4],"-s4") == 0){
+	else if(argc > 4 && strcmp(argv[5],"-s4") == 0){
 		cruncher_mode = 4;
 	}
 
 	size_t in_size;
 	uint8_t* in_bytes = read_file(argv[1], &in_size);
+
+	size_t out_max_size = in_size + 256;//safety margin
+	uint8_t* out_buf = new uint8_t[out_max_size];
+	size_t out_start = 0;
+
+	//mandatory header:
+	out_buf[out_start++] = 153;
+	out_buf[out_start++] = 72;
+	out_buf[out_start++] = 79;
+	out_buf[out_start++] = 72;
+
+	//color format, encoder only takes rgb :)
+	out_buf[out_start++] = 2;
+
+	//only 8bit image for now
+	out_buf[out_start++] = 8;
+
+	//width, height, varints
+	write_varint(out_buf, &out_start, width - 1);
+	write_varint(out_buf, &out_start, height - 1);
+	//end header
+
+	// 1x1 tile image, no multitiles yet
+	out_buf[out_start++] = 0;
+	out_buf[out_start++] = 0;
+	//no offsets needed
+	
 
 	static const uint32_t prob_bits = 16;
 	static const uint32_t prob_scale = 1 << prob_bits;
@@ -800,18 +840,6 @@ int main(int argc, char *argv[]){
 
 	int best_size;
 	if(grey_test(in_bytes, in_size)){
-		uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
-		best_size = layer_encode(
-			GREY,
-			in_size/3,
-			width,
-			height,
-			8,
-			cruncher_mode,
-			LEMPEL_NUKE
-		) + lz_external_overhead;
-		delete[] GREY;
-
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
 		if(binary_test(binary, in_size/3)){
 			binarize(binary, in_size/3);
@@ -825,6 +853,20 @@ int main(int argc, char *argv[]){
 			if(bit_size < best_size){
 				best_size = bit_size;
 			}
+		}
+		else{
+			//TODO 8bit for less memory usage
+			uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
+			best_size = layer_encode(
+				GREY,
+				in_size/3,
+				width,
+				height,
+				8,
+				cruncher_mode,
+				LEMPEL_NUKE
+			) + lz_external_overhead;
+			delete[] GREY;
 		}
 	}
 	else{
@@ -937,39 +979,8 @@ int main(int argc, char *argv[]){
 	delete[] LEMPEL_NUKE;
 
 	printf("%d\n",best_size + 8 + 8 + 2 + 3);
-	//printf("Total file size: %d bytes\n",best_size + 8 + 8 + 2 + 3);
-	//data size + channel offsets + width/height + transforms + identifier
 
-	/*Rans64EncSymbol esyms[256];
-	Rans64DecSymbol dsyms[256];
-
-	for (int i=0; i < 256; i++) {
-		Rans64EncSymbolInit(&esyms[i], stats.cum_freqs[i], stats.freqs[i], prob_bits);
-		Rans64DecSymbolInit(&dsyms[i], stats.cum_freqs[i], stats.freqs[i]);
-	}*/
-
-	/*
-	// cumlative->symbol table
-	// this is super brute force
-	uint8_t cum2sym[prob_scale];
-	for (int s=0; s < 256; s++)
-		for (uint32_t i=stats.cum_freqs[s]; i < stats.cum_freqs[s+1]; i++)
-			cum2sym[i] = s;
-	// try rANS decode
-	{
-
-		Rans64State rans;
-		uint32_t* ptr = rans_begin;
-		Rans64DecInit(&rans, &ptr);
-
-		for (size_t i=0; i < in_size; i++) {
-			uint32_t s = cum2sym[Rans64DecGet(&rans, prob_bits)];
-			dec_bytes[i] = (uint8_t) s;
-			Rans64DecAdvanceSymbol(&rans, &ptr, &dsyms[s], prob_bits);
-		}
-	}*/
-
-	//delete[] dec_bytes;
 	delete[] in_bytes;
+	write_file(argv[2],out_buf,out_start);
 	return 0;
 }

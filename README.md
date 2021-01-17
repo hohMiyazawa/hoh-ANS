@@ -3,17 +3,22 @@ Experimental lossless image compression, based on rANS entropy coding ([ryg-rans
 Proof of concept, useless for most edge cases.
 
 ## Usage
-
+Encoding:
 ```
-choh infile.raw width height -sN
+choh infile.rgb outfile.hoh width height -sN
 ```
 Where "N" is a number 0-4 (fast-slow).
-"infile.raw" must consist of raw 8bit RGB bytes.
+"infile.rgb" must consist of raw 8bit RGB bytes.
 You can make such a file with imagemagick:
 ```
-convert input.png -depth 8 rgb:infile.raw
+convert input.png -depth 8 rgb:infile.rgb
 ```
-Encoded size is reported, but no data is written.
+Encoded size is reported, but no data is written. (Work in progress, it currently writes headers and stuff).
+
+Decoding:
+```
+dhoh infile.hoh outfile.rgb
+```
 
 ## Building
 
