@@ -11,10 +11,8 @@
 
 #include "varint.hpp"
 #include "file_io.hpp"
-#include "symbolstats.hpp"
 #include "channel.hpp"
 #include "lz.hpp"
-#include "channel_encode.hpp"
 #include "bitimage.hpp"
 #include "entropy_encoding.hpp"
 
@@ -392,23 +390,14 @@ int layer_encode(
 		}
 	}
 
-	int channel_size_lz = channel_encode(
-		predict_cleaned,
-		cleaned_pointer,
-		depth + 1,
-		prob_bits,
-		dummy1,
-		dummy2,
-		dummy3
-	);
-
-	uint8_t* dummyrand;
-	encode_entropy(
+	size_t maximum_size = 10 + (1<<(depth + 1))*2 + (cleaned_pointer*(depth + 1) + 8 - 1)/8;
+	uint8_t* dummyrand = new uint8_t[maximum_size];
+	size_t channel_size_lz = encode_entropy(
 		predict_cleaned,
 		cleaned_pointer,
 		1<<(depth + 1),
 		dummyrand,
-		5
+		prob_bits
 	);
 
 	if(channel_size_lz < possible_size){
@@ -562,44 +551,38 @@ int layer_encode(
 		delete[] predictor_list;
 	}
 	if(cruncher_mode){
-		int temp_size;
+		size_t temp_size;
 		cleaned_pointer = 0;
 		for(int j=0;j<size;j++){
 			if(LEMPEL_NUKE[j] == 0){
 				predict_cleaned[cleaned_pointer++] = predict[j];
 			}
 		}
-		int temp_size1 = channel_encode(
+		size_t temp_size1 = encode_entropy(
 			predict_cleaned,
 			cleaned_pointer,
-			depth + 1,
-			16,
-			dummy1,
-			dummy2,
-			dummy3
+			1<<(depth + 1),
+			dummyrand,
+			16
 		);
-		int temp_size2 = channel_encode(
+		size_t temp_size2 = encode_entropy(
 			predict_cleaned,
 			cleaned_pointer,
-			depth + 1,
-			15,
-			dummy1,
-			dummy2,
-			dummy3
+			1<<(depth + 1),
+			dummyrand,
+			15
 		);
 		if(temp_size1 < temp_size2){
 			if(temp_size1 < possible_size){
 				possible_size = temp_size1;
 			}
 			for(uint32_t i=17;i < 20;i++){
-				temp_size = channel_encode(
+				temp_size = encode_entropy(
 					predict_cleaned,
 					cleaned_pointer,
-					depth + 1,
-					i,
-					dummy1,
-					dummy2,
-					dummy3
+					1<<(depth + 1),
+					dummyrand,
+					i
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
@@ -611,14 +594,12 @@ int layer_encode(
 				possible_size = temp_size2;
 			}
 			for(uint32_t i=14;i > 11;i--){
-				temp_size = channel_encode(
+				temp_size = encode_entropy(
 					predict_cleaned,
 					cleaned_pointer,
-					depth + 1,
-					i,
-					dummy1,
-					dummy2,
-					dummy3
+					1<<(depth + 1),
+					dummyrand,
+					i
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
@@ -627,6 +608,7 @@ int layer_encode(
 		}
 	}
 
+	delete[] dummyrand;
 	delete[] predict;
 	delete[] predict_cleaned;
 
