@@ -85,7 +85,7 @@ size_t encode_entropy(
 	size_t entropy_size = 0;
 	output_bytes = new uint8_t[maximum_size];
 
-	printf("maximum_bits_per_symbol: %d\n",(int)maximum_bits_per_symbol);
+	//printf("maximum_bits_per_symbol: %d\n",(int)maximum_bits_per_symbol);
 
 	uint32_t prob_bits = 14;
 	uint32_t prob_scale = 1 << prob_bits;
@@ -94,28 +94,129 @@ size_t encode_entropy(
 	for(size_t i=0;i<symbol_size;i++){
 		freqs[symbols[i]]++;
 	}
-	printf("prob_scale: %d\n",(int)prob_scale);
+	//printf("prob_scale: %d\n",(int)prob_scale);
 	normalize_freqs(freqs,cum_freqs,range,prob_scale);
 //encode table here
 	write_varint(output_bytes, &entropy_size, range-1);
 	write_varint(output_bytes, &entropy_size, symbol_size-1);
-	output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 1;
-	uint8_t bits_remaining = 8;
-	uint8_t current_byte;
-	for(int i=0;i<range;i++){
-		current_byte += freqs[i] >>(prob_bits - bits_remaining);
-		output_bytes[entropy_size++] = current_byte;
-		if(bits_remaining + 8 >= prob_bits){
-			bits_remaining = (8 - (prob_bits - bits_remaining));
+
+	size_t expected_raw_size = (prob_bits*range + 8 - 1)/8;
+	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
+	expected_clamped_size += prob_bits*2;
+
+	uint16_t lower_clamps[((prob_bits - 1)/4 + 2)];
+	uint16_t upper_clamps[((prob_bits - 1)/4 + 2)];
+
+	int size_bits = 0;
+	for(int i=0;i<range/2 - 1;i++){
+		while(freqs[i] >= (1<<size_bits)){
+			if(size_bits == 0){
+				size_bits = 1;
+				lower_clamps[0] = i;
+			}
+			else if(size_bits == 1){
+				size_bits = 4;
+				lower_clamps[1] = i;
+			}
+			else{
+				lower_clamps[size_bits/4 + 1] = i;
+				size_bits += 4;
+			}
 		}
-		else{
-			output_bytes[entropy_size++] = (uint8_t)((freqs[i] >>(prob_bits - 8 - bits_remaining)) % 256);
-			bits_remaining = 16 + bits_remaining - prob_bits;
+		if(size_bits > prob_bits){
+			size_bits = prob_bits;
 		}
-		current_byte = (uint8_t)((freqs[i]<<bits_remaining) % 256);
+		expected_clamped_size += size_bits;
 	}
-	if(bits_remaining != 8){
-		output_bytes[entropy_size++] = current_byte;
+	size_bits = 0;
+	for(int i=range - 1;i>range/2;i--){
+		while(freqs[i] >= (1<<size_bits)){
+			if(size_bits == 0){
+				size_bits = 1;
+				upper_clamps[0] = 511 - i;
+			}
+			else if(size_bits == 1){
+				size_bits = 4;
+				upper_clamps[1] = 511 - i;
+			}
+			else{
+				upper_clamps[size_bits/4 + 1] = 511 - i;
+				size_bits += 4;
+			}
+		}
+		if(size_bits > prob_bits){
+			size_bits = prob_bits;
+		}
+		expected_clamped_size += size_bits;
+	}
+	expected_clamped_size = (expected_clamped_size + 8 - 1)/8;
+	//printf("tab %d %d\n",(int)expected_raw_size,(int)expected_clamped_size);
+	if(expected_raw_size < expected_clamped_size){
+		output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 1;
+		uint8_t bits_remaining = 8;
+		uint8_t current_byte;
+		for(int i=0;i<range;i++){
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[i],maximum_bits_per_symbol);
+		}
+		if(bits_remaining != 8){
+			output_bytes[entropy_size++] = current_byte;
+		}
+	}
+	else{
+		output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 2;
+		uint8_t bits_remaining = 8;
+		uint8_t current_byte;
+		for(int i=0;i<((prob_bits - 1)/4 + 2);i++){
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)lower_clamps[i],maximum_bits_per_symbol - 1);
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)upper_clamps[i],maximum_bits_per_symbol - 1);
+		}
+		int size_bits = 0;
+		for(int i=0;i<range/2 - 1;i++){
+			while(freqs[i] >= (1<<size_bits)){
+				if(size_bits == 0){
+					size_bits = 1;
+					lower_clamps[0] = i;
+				}
+				else if(size_bits == 1){
+					size_bits = 4;
+					lower_clamps[1] = i;
+				}
+				else{
+					lower_clamps[size_bits/4 + 1] = i;
+					size_bits += 4;
+				}
+			}
+			if(size_bits > prob_bits){
+				size_bits = prob_bits;
+			}
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[i],size_bits);
+		}
+		stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[range/2 - 1],maximum_bits_per_symbol);
+		size_bits = 0;
+		for(int i=range - 1;i>range/2;i--){
+			while(freqs[i] >= (1<<size_bits)){
+				if(size_bits == 0){
+					size_bits = 1;
+					upper_clamps[0] = 511 - i;
+				}
+				else if(size_bits == 1){
+					size_bits = 4;
+					upper_clamps[1] = 511 - i;
+				}
+				else{
+					upper_clamps[size_bits/4 + 1] = 511 - i;
+					size_bits += 4;
+				}
+			}
+			if(size_bits > prob_bits){
+				size_bits = prob_bits;
+			}
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[i],size_bits);
+		}
+		stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[range/2],maximum_bits_per_symbol);
+		if(bits_remaining != 8){
+			output_bytes[entropy_size++] = current_byte;
+		}
 	}
 
 //end encode table
@@ -141,7 +242,6 @@ size_t encode_entropy(
 	Rans64EncFlush(&rans, &ptr);
 	uint32_t* rans_begin = ptr;
 
-	int bytes = (int) ((out_end - rans_begin) * sizeof(uint32_t));
 	while(rans_begin < out_end){
 		output_bytes[entropy_size++] = (uint8_t)((*rans_begin)>>24);
 		output_bytes[entropy_size++] = (uint8_t)((*rans_begin)>>16);
@@ -149,14 +249,12 @@ size_t encode_entropy(
 		output_bytes[entropy_size++] = (uint8_t)(*rans_begin);
 		rans_begin++;
 	}
-	
-	printf("rANS: %d bytes\n", bytes);
 
 	delete[] freqs;
 	delete[] cum_freqs;
 	delete[] out_buf;
 	
-	printf("woof: %d\n",(int)entropy_size);
+	printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
 }
 

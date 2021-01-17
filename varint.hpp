@@ -34,4 +34,36 @@ void write_varint(uint8_t* bytes, size_t* location, size_t value){//must be impr
 	}
 }
 
+void stuffer(
+	uint8_t* bytes,
+	size_t* location,
+	uint8_t* remainder,
+	uint8_t* bits_remaining,
+	uint32_t value,
+	uint8_t bits
+){
+	if(bits < *bits_remaining){
+		*remainder = *remainder + (uint8_t)(value<<(*bits_remaining - bits));
+		*bits_remaining = *bits_remaining - bits;
+	}
+	else if(bits == *bits_remaining){
+		bytes[(*location)++] = *remainder + (uint8_t)value;
+		*remainder = 0;
+		*bits_remaining = 8;
+	}
+	else if(bits > *bits_remaining){
+		if(bits > 8){
+			uint32_t top = value>>8;
+			uint32_t bottom = value % 256;
+			stuffer(bytes,location,remainder,bits_remaining,top,bits - 8);
+			stuffer(bytes,location,remainder,bits_remaining,bottom,8);
+		}
+		else{
+			bytes[(*location)++] = *remainder + (uint8_t)(value>>(bits - *bits_remaining));
+			*bits_remaining = (8 - (bits - *bits_remaining));
+			*remainder = (uint8_t)((value<<(*bits_remaining)) % 256);
+		}
+	}
+}
+
 #endif //VARINT_HEADER
