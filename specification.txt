@@ -47,19 +47,23 @@ varints of offsets to all channels from the previous after the first one. (may b
 # channel transforms
 1 byte, colour compaction, prediction, entropy coding
 [colour compaction]
-	1 byte, compaction mode
+	(3bits) reasonable combos:
+		NONE
+		clamping
 		bitmask
-		clamping ON
-		clamping OFF
-		pointers ON
-		pointers OFF
-		laplace coded deltas
+		laplace
+		pointers
+		clamping + bitmask
+		clamping + laplace
+		clamping + pointers
 		
-[prediction]}
+[prediction]
+	(1bit)
 	1 byte x_tiles
 	1 byte y_tiles
 	subchannel prediction tiles
 [entropy coding]
+	(4bits?)
 	rANS
 		rygrans64
 	store

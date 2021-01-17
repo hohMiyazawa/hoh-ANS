@@ -101,19 +101,81 @@ uint8_t* decode_channel(
 	int height
 ){
 	uint8_t channel_transforms = in_bytes[byte_pointer++];
+	uint8_t compaction_mode = (channel_transforms & 0b11100000)>>5;
+	uint8_t prediction_mode = (channel_transforms & 0b00010000)>>4;
+	uint8_t entropy_mode    = (channel_transforms & 0b00001111);
 	uint8_t* decoded = new uint8_t[width*height];
-	if(channel_transforms == 0){
+	uint8_t colour_map[1<<bit_depth];
+	if(compaction_mode == 0){
+		printf("no channel compaction\n");
+		//as-is
+		for(int i=0;i<(1<<bit_depth);i++){
+			colour_map[i] = i;
+		}
+	}
+	else if(compaction_mode == 1){
+		printf("clamped channel\n");
+		//clamping
 		if(bit_depth == 8){
-			for(int i=0;i<width*height;i++){
-				decoded[i] = in_bytes[byte_pointer++];
+			uint8_t clamp1 = in_bytes[byte_pointer++];
+			uint8_t clamp2 = in_bytes[byte_pointer++];
+			if(clamp1 > clamp2){
+				//unsure what this should mean
+			}
+			else{
 			}
 		}
 		else{
 			printf("unimplemented bit depth!\n");
 		}
 	}
+	else if(compaction_mode == 2){
+		printf("bitmasked channel\n");
+		//bitmask
+		uint8_t bitmask[(1<<bit_depth)/8];
+		for(int i=0;i<(1<<bit_depth)/8;i++){
+			bitmask[i] = in_bytes[byte_pointer++];
+		}
+	}
+	else if(compaction_mode == 3){
+		//laplace???
+	}
+	else if(compaction_mode == 4){
+		uint8_t pointernumber = in_bytes[byte_pointer++];
+		uint8_t pointers[pointernumber];
+		for(int i=0;i<pointernumber;i++){
+			pointers[i] = in_bytes[byte_pointer++];
+		}
+	}
+	else if(compaction_mode == 5){
+		uint8_t clamp1 = in_bytes[byte_pointer++];
+		uint8_t clamp2 = in_bytes[byte_pointer++];
+		uint8_t bitmask[(clamp2 - clamp1 + 8)/8];
+		for(int i=0;i<(clamp2 - clamp1 + 8)/8;i++){
+			bitmask[i] = in_bytes[byte_pointer++];
+		}
+	}
+	else if(compaction_mode == 6){
+	}
+	else if(compaction_mode == 7){
+	}
+	if(prediction_mode){
+		printf("unimplemented prediction mode!\n");
+	}
 	else{
-		printf("unimplemented channel transform!\n");
+		if(entropy_mode == 0){
+			if(bit_depth == 8){
+				for(int i=0;i<width*height;i++){
+					decoded[i] = in_bytes[byte_pointer++];
+				}
+			}
+			else{
+				printf("unimplemented bit depth!\n");
+			}
+		}
+		else{
+			printf("unimplemented entropy mode!\n");
+		}
 	}
 	return decoded;
 }
