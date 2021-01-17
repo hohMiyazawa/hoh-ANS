@@ -402,6 +402,15 @@ int layer_encode(
 		dummy3
 	);
 
+	uint8_t* dummyrand;
+	encode_entropy(
+		predict_cleaned,
+		cleaned_pointer,
+		1<<(depth + 1),
+		dummyrand,
+		5
+	);
+
 	if(channel_size_lz < possible_size){
 		possible_size = channel_size_lz;
 	}

@@ -2,6 +2,7 @@
 #define SYMBOLSTATS_HEADER
 
 #include <cmath>
+#include <assert.h>
 
 struct SymbolStats_256{
 	uint32_t freqs[256];

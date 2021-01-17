@@ -2,6 +2,7 @@
 #define CHANNEL_ENCODE_HEADER
 
 #include "rans64.hpp"
+#include "symbolstats.hpp"
 
 int ranscode_symbols_256(
 	uint8_t* symbols,
