@@ -78,7 +78,6 @@ int find_lz_rgb(
 		}
 	}
 	*lz_symbol_size = lz_index;
-
 	uint8_t* dummyrand = new uint8_t[lz_index + 10];
 
 	size_t lz_overhead1 = encode_entropy(
@@ -103,6 +102,7 @@ int find_lz_rgb(
 		10
 	);
 	size_t lz_overhead4 = 0;
+
 	if(distance > 8){
 		lz_overhead4 = encode_entropy(
 			lz_backby2,

@@ -70,7 +70,8 @@ varints of offsets to all channels from the previous after the first one. (may b
 
 entropy structure:
 varint, symbol range-1
-varint, symbol number-1
+varint, symbol number
+(end here if zero symbols)
 1 byte (highest bit)
 	0:store
 		minimum number of bits to store depth (or compacted depth)

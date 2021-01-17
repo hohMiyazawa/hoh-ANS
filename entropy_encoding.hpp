@@ -76,12 +76,16 @@ size_t encode_entropy(
 	uint8_t* output_bytes,
 	uint32_t prob_bits
 ){
+	size_t entropy_size = 0;
+	if(symbol_size == 0){
+		write_varint(output_bytes, &entropy_size, range-1);
+		write_varint(output_bytes, &entropy_size, symbol_size);
+		return entropy_size;
+	}
 	uint8_t maximum_bits_per_symbol = 0;
 	for(size_t check = (range - 1);check;check = (check>>1)){
 		maximum_bits_per_symbol++;
 	}
-
-	size_t entropy_size = 0;
 
 	//printf("maximum_bits_per_symbol: %d\n",(int)maximum_bits_per_symbol);
 
@@ -98,7 +102,8 @@ size_t encode_entropy(
 	normalize_freqs(freqs,cum_freqs,range,prob_scale);
 //encode table here
 	write_varint(output_bytes, &entropy_size, range-1);
-	write_varint(output_bytes, &entropy_size, symbol_size-1);
+	write_varint(output_bytes, &entropy_size, symbol_size);
+	size_t expected_stored_size = entropy_size + 1 + (maximum_bits_per_symbol*symbol_size + 8 - 1)/8;
 
 	size_t expected_raw_size = (prob_bits*range + 8 - 1)/8;
 	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
@@ -253,6 +258,13 @@ size_t encode_entropy(
 	delete[] freqs;
 	delete[] cum_freqs;
 	delete[] out_buf;
+
+	if(expected_stored_size < entropy_size){
+		entropy_size = 0;
+		write_varint(output_bytes, &entropy_size, range-1);
+		write_varint(output_bytes, &entropy_size, symbol_size);
+		output_bytes[entropy_size++] = 0;
+	}
 	
 	printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
@@ -265,12 +277,16 @@ size_t encode_entropy(
 	uint8_t* output_bytes,
 	uint32_t prob_bits
 ){
+	size_t entropy_size = 0;
+	if(symbol_size == 0){
+		write_varint(output_bytes, &entropy_size, range-1);
+		write_varint(output_bytes, &entropy_size, symbol_size);
+		return entropy_size;
+	}
 	uint8_t maximum_bits_per_symbol = 0;
 	for(size_t check = (range - 1);check;check = (check>>1)){
 		maximum_bits_per_symbol++;
 	}
-
-	size_t entropy_size = 0;
 
 	//printf("maximum_bits_per_symbol: %d\n",(int)maximum_bits_per_symbol);
 
@@ -287,7 +303,8 @@ size_t encode_entropy(
 	normalize_freqs(freqs,cum_freqs,range,prob_scale);
 //encode table here
 	write_varint(output_bytes, &entropy_size, range-1);
-	write_varint(output_bytes, &entropy_size, symbol_size-1);
+	write_varint(output_bytes, &entropy_size, symbol_size);
+	size_t expected_stored_size = entropy_size + 1 + (maximum_bits_per_symbol*symbol_size + 8 - 1)/8;
 
 	size_t expected_raw_size = (prob_bits*range + 8 - 1)/8;
 	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
@@ -442,6 +459,13 @@ size_t encode_entropy(
 	delete[] freqs;
 	delete[] cum_freqs;
 	delete[] out_buf;
+
+	if(expected_stored_size < entropy_size){
+		entropy_size = 0;
+		write_varint(output_bytes, &entropy_size, range-1);
+		write_varint(output_bytes, &entropy_size, symbol_size);
+		output_bytes[entropy_size++] = 0;
+	}
 	
 	printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;

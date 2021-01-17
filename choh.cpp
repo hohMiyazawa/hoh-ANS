@@ -764,7 +764,8 @@ int main(int argc, char *argv[]){
 	out_buf[out_start++] = 0;
 	out_buf[out_start++] = 0;
 	//no offsets needed
-	
+
+
 
 	static const uint32_t prob_bits = 16;
 	static const uint32_t prob_scale = 1 << prob_bits;

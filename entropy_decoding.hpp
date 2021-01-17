@@ -11,7 +11,7 @@ uint16_t* decode_entropy(
 	size_t* symbol_size
 ){
 	size_t symbol_range = read_varint(in_bytes, byte_pointer)+1;
-	*symbol_size = read_varint(in_bytes, byte_pointer)+1;
+	*symbol_size = read_varint(in_bytes, byte_pointer);
 
 	uint8_t metadata = in_bytes[(*byte_pointer)++];
 	uint8_t entropy_mode = metadata>>7;
