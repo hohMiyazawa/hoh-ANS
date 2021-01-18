@@ -266,7 +266,7 @@ size_t encode_entropy(
 		output_bytes[entropy_size++] = 0;
 	}
 	
-	printf("entropy: %d\n",(int)entropy_size);
+	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
 }
 
@@ -467,7 +467,7 @@ size_t encode_entropy(
 		output_bytes[entropy_size++] = 0;
 	}
 	
-	printf("entropy: %d\n",(int)entropy_size);
+	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
 }
 

@@ -612,6 +612,7 @@ int layer_encode(
 	delete[] predict;
 	delete[] predict_cleaned;
 
+	//printf("layer cost %d\n",(int)possible_size);
 	return possible_size + 1 + tile_cost;
 }
 
@@ -696,76 +697,22 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 	return encoded_size;
 }
 
-void print_usage(){
-	printf("usage: choh infile.rgb outfile.hoh width height -sN\n");
-	printf("where N is a number 0-3(fast-slow). Default value 1.\n\n");
-	printf("The input file must consist of raw 8bit RGB bytes\n");
-	printf("You can make such a file with imagemagick:\n");
-	printf("convert input.png -depth 8 rgb:infile.rgb\n\n");
-	printf("Output will at present not be written because file IO is tedious\n");
-}
-
-int main(int argc, char *argv[]){
-	if(argc < 5){
-		printf("not enough arguments\n");
-		print_usage();
-		return 1;
-	}
-
-	int width = atoi(argv[3]);
-	int height = atoi(argv[4]);
-	if(width == 0 || height == 0){
-		printf("invalid width or height\n");
-		print_usage();
-		return 2;
-	}
-	int cruncher_mode = 1;
-	if(argc > 4 && strcmp(argv[5],"-s0") == 0){
-		cruncher_mode = 0;
-	}
-	else if(argc > 4 && strcmp(argv[5],"-s1") == 0){
-		cruncher_mode = 1;
-	}
-	else if(argc > 4 && strcmp(argv[5],"-s2") == 0){
-		cruncher_mode = 2;
-	}
-	else if(argc > 4 && strcmp(argv[5],"-s3") == 0){
-		cruncher_mode = 3;
-	}
-	else if(argc > 4 && strcmp(argv[5],"-s4") == 0){
-		cruncher_mode = 4;
-	}
-
-	size_t in_size;
-	uint8_t* in_bytes = read_file(argv[1], &in_size);
-
+size_t encode_tile(
+	uint8_t* in_bytes,
+	size_t in_size,
+	uint8_t* out_buf,
+	int width,
+	int height,
+	int cruncher_mode
+){
 	size_t out_max_size = in_size + 256;//safety margin
-	uint8_t* out_buf = new uint8_t[out_max_size];
+	out_buf = new uint8_t[out_max_size];
 	size_t out_start = 0;
 
-	//mandatory header:
-	out_buf[out_start++] = 153;
-	out_buf[out_start++] = 72;
-	out_buf[out_start++] = 79;
-	out_buf[out_start++] = 72;
-
-	//color format, encoder only takes rgb :)
-	out_buf[out_start++] = 2;
-
-	//only 8bit image for now
-	out_buf[out_start++] = 8;
-
-	//width, height, varints
-	write_varint(out_buf, &out_start, width - 1);
-	write_varint(out_buf, &out_start, height - 1);
-	//end header
-
-	// 1x1 tile image, no multitiles yet
+	// 1x1 tile image
 	out_buf[out_start++] = 0;
 	out_buf[out_start++] = 0;
 	//no offsets needed
-
-
 
 	static const uint32_t prob_bits = 16;
 	static const uint32_t prob_scale = 1 << prob_bits;
@@ -972,7 +919,133 @@ int main(int argc, char *argv[]){
 	delete[] LEMPEL;
 	delete[] LEMPEL_NUKE;
 
-	printf("%d\n",best_size + 8 + 8 + 2 + 3);
+	return out_start + best_size;
+}
+
+void print_usage(){
+	printf("usage: choh infile.rgb outfile.hoh width height -sN\n");
+	printf("where N is a number 0-3(fast-slow). Default value 1.\n\n");
+	printf("The input file must consist of raw 8bit RGB bytes\n");
+	printf("You can make such a file with imagemagick:\n");
+	printf("convert input.png -depth 8 rgb:infile.rgb\n\n");
+	printf("Output will at present not be written because file IO is tedious\n");
+}
+
+int main(int argc, char *argv[]){
+	if(argc < 5){
+		printf("not enough arguments\n");
+		print_usage();
+		return 1;
+	}
+
+	int width = atoi(argv[3]);
+	int height = atoi(argv[4]);
+	if(width == 0 || height == 0){
+		printf("invalid width or height\n");
+		print_usage();
+		return 2;
+	}
+	int cruncher_mode = 1;
+	if(argc > 4 && strcmp(argv[5],"-s0") == 0){
+		cruncher_mode = 0;
+	}
+	else if(argc > 4 && strcmp(argv[5],"-s1") == 0){
+		cruncher_mode = 1;
+	}
+	else if(argc > 4 && strcmp(argv[5],"-s2") == 0){
+		cruncher_mode = 2;
+	}
+	else if(argc > 4 && strcmp(argv[5],"-s3") == 0){
+		cruncher_mode = 3;
+	}
+	else if(argc > 4 && strcmp(argv[5],"-s4") == 0){
+		cruncher_mode = 4;
+	}
+
+	size_t in_size;
+	uint8_t* in_bytes = read_file(argv[1], &in_size);
+
+	size_t out_max_size = in_size + 256;//safety margin
+	uint8_t* out_buf = new uint8_t[out_max_size];
+	size_t out_start = 0;
+
+	//mandatory header:
+	out_buf[out_start++] = 153;
+	out_buf[out_start++] = 72;
+	out_buf[out_start++] = 79;
+	out_buf[out_start++] = 72;
+
+	//color format, encoder only takes rgb :)
+	out_buf[out_start++] = 2;
+
+	//only 8bit image for now
+	out_buf[out_start++] = 8;
+
+	//width, height, varints
+	write_varint(out_buf, &out_start, width - 1);
+	write_varint(out_buf, &out_start, height - 1);
+	//end header
+	size_t tile_size = 0;
+
+	if((width >= 512 || height >= 512) && width >= 256 && height >= 256){
+		out_buf[out_start++] = 1;
+		out_buf[out_start++] = 1;
+		int x_tiles = (width ) / 256;
+		int y_tiles = (height) / 256;
+		int tile_width  = (width  + x_tiles - 1)/x_tiles;
+		int tile_height = (height + y_tiles - 1)/y_tiles;
+		for(int i=0;i<x_tiles*y_tiles;i++){
+			int new_width = tile_width;
+			int new_height = tile_height;
+			int x_offset = (i % x_tiles)*tile_width;
+			int y_offset = (i / x_tiles)*tile_height;
+			if(width - x_offset < new_width){
+				new_width = width - x_offset;
+			}
+			if(height - y_offset < new_height){
+				new_height = height - y_offset;
+			}
+			size_t new_size = new_width*new_height;
+			uint8_t* new_bytes = new uint8_t[new_size*3];
+
+			for(int y=0;y<new_height;y++){
+				for(int x=0;x<new_width;x++){
+					new_bytes[(y*new_width + x)*3]     = in_bytes[((y + y_offset)*width + x_offset + x)*3];
+					new_bytes[(y*new_width + x)*3 + 1] = in_bytes[((y + y_offset)*width + x_offset + x)*3 + 1];
+					new_bytes[(y*new_width + x)*3 + 2] = in_bytes[((y + y_offset)*width + x_offset + x)*3 + 2];
+				}
+			}
+			uint8_t* tile_buf;
+			tile_size += encode_tile(
+				new_bytes,
+				new_size*3,
+				tile_buf,
+				new_width,
+				new_height,
+				cruncher_mode
+			);
+			delete[] tile_buf;
+			delete[] new_bytes;
+		}
+
+		write_varint(out_buf, &out_start, 2000);//fill in some offsets later
+		write_varint(out_buf, &out_start, 2000);
+		write_varint(out_buf, &out_start, 2000);
+	}
+	else{
+		uint8_t* tile_buf;
+		tile_size += encode_tile(
+			in_bytes,
+			in_size,
+			tile_buf,
+			width,
+			height,
+			cruncher_mode
+		);
+		delete[] tile_buf;
+	}
+
+	printf("%d\n",(int)(out_start + tile_size));
 
 	delete[] in_bytes;
 	write_file(argv[2],out_buf,out_start);
