@@ -6,6 +6,8 @@
 int find_lz_rgb(
 	uint8_t* source,
 	size_t size,
+	int width,
+	int height,
 	uint8_t* lz_symbols,
 	size_t* lz_symbol_size,
 	uint8_t* nukemap,
@@ -30,9 +32,6 @@ int find_lz_rgb(
 		int longest = 0;
 		int best_back = -1;
 		for(int back=1;back<=limit_distance && i - back*3 >= 0;back++){
-			if(i - back < 0){
-				break;
-			}
 			int offset = 0;
 			while(
 				i + offset*3 < size
@@ -48,6 +47,27 @@ int find_lz_rgb(
 				best_back = back;
 				if(offset == 259){//short circuit
 					back = limit_distance;
+				}
+			}
+		}
+		if(longest < 259 && distance > 8){
+			for(int back=width;back <= (1<<16) && i - back*3 >= 0;back += width){
+				int offset = 0;
+				while(
+					i + offset*3 < size
+					&& source[i + offset*3] == source[i - back*3 + offset*3]
+					&& source[i + offset*3 + 1] == source[i - back*3 + offset*3 + 1]
+					&& source[i + offset*3 + 2] == source[i - back*3 + offset*3 + 2]
+					&& offset < 259
+				){
+					offset++;
+				}
+				if(offset > longest){
+					longest = offset;
+					best_back = back;
+					if(offset == 259){//short circuit
+						back = limit_distance;
+					}
 				}
 			}
 		}

@@ -758,6 +758,8 @@ size_t encode_tile(
 	int lz_external_overhead = find_lz_rgb(
 		in_bytes,
 		in_size,
+		width,
+		height,
 		LEMPEL,
 		&lz_symbol_size,
 		LEMPEL_NUKE,
