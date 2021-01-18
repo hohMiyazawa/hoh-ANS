@@ -307,54 +307,60 @@ size_t encode_entropy(
 	size_t expected_stored_size = entropy_size + 1 + (maximum_bits_per_symbol*symbol_size + 8 - 1)/8;
 
 	size_t expected_raw_size = (prob_bits*range + 8 - 1)/8;
-	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
-	expected_clamped_size += prob_bits*2;
+	size_t expected_clamped_size = 2*(maximum_bits_per_symbol)*((prob_bits - 1)/4 + 2);
 
 	uint8_t lower_clamps[((prob_bits - 1)/4 + 2)];
 	uint8_t upper_clamps[((prob_bits - 1)/4 + 2)];
 
 	int size_bits = 0;
-	for(int i=0;i<range/2 - 1;i++){
-		while(freqs[i] >= (1<<size_bits)){
+	int climb = 0;
+	for(;climb<range;climb++){
+		while(freqs[climb] >= (1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
-				lower_clamps[0] = i;
+				lower_clamps[0] = climb;
 			}
 			else if(size_bits == 1){
 				size_bits = 4;
-				lower_clamps[1] = i;
+				lower_clamps[1] = climb;
 			}
 			else{
-				lower_clamps[size_bits/4 + 1] = i;
+				lower_clamps[size_bits/4 + 1] = climb;
 				size_bits += 4;
 			}
 		}
-		if(size_bits > prob_bits){
+		if(size_bits >= prob_bits){
 			size_bits = prob_bits;
+			expected_clamped_size += size_bits;
+			break;
 		}
 		expected_clamped_size += size_bits;
 	}
 	size_bits = 0;
-	for(int i=range - 1;i>range/2;i--){
-		while(freqs[i] >= (1<<size_bits)){
+	int climb2 = range - 1;
+	for(;climb2 > climb;climb2--){
+		while(freqs[climb2] >= (1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
-				upper_clamps[0] = 511 - i;
+				upper_clamps[0] = climb2;
 			}
 			else if(size_bits == 1){
 				size_bits = 4;
-				upper_clamps[1] = 511 - i;
+				upper_clamps[1] = climb2;
 			}
 			else{
-				upper_clamps[size_bits/4 + 1] = 511 - i;
+				upper_clamps[size_bits/4 + 1] = climb2;
 				size_bits += 4;
 			}
 		}
-		if(size_bits > prob_bits){
+		if(size_bits >= prob_bits){
 			size_bits = prob_bits;
+			expected_clamped_size += size_bits;
+			break;
 		}
 		expected_clamped_size += size_bits;
 	}
+	expected_clamped_size += size_bits*(climb2 - climb - 1);
 	expected_clamped_size = (expected_clamped_size + 8 - 1)/8;
 	//printf("tab %d %d\n",(int)expected_raw_size,(int)expected_clamped_size);
 	if(expected_raw_size < expected_clamped_size){
@@ -373,8 +379,8 @@ size_t encode_entropy(
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte;
 		for(int i=0;i<((prob_bits - 1)/4 + 2);i++){
-			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)lower_clamps[i],maximum_bits_per_symbol - 1);
-			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)upper_clamps[i],maximum_bits_per_symbol - 1);
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)lower_clamps[i],maximum_bits_per_symbol);
+			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)upper_clamps[i],maximum_bits_per_symbol);
 		}
 		int size_bits = 0;
 		for(int i=0;i<range/2 - 1;i++){

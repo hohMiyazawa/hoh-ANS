@@ -357,6 +357,36 @@ int layer_encode(
 ){
 	int possible_size = (depth*size + depth*size % 8)/8;
 
+	size_t compaction_overhead = 0;
+	if(cruncher_mode){
+		uint32_t colused[1<<depth];
+		for(int i=0;i<(1<<depth);i++){
+			colused[i] = 0;
+		}
+		for(int i=0;i<size;i++){
+			colused[data[i]]++;
+		}
+		int col_count = 0;
+		for(int i=0;i<(1<<depth);i++){
+			if(colused[i]){
+				col_count++;
+			}
+		}
+		if(col_count < 32){
+			compaction_overhead = (1<<depth)/8;
+			size_t next_open = 0;
+			uint32_t colmap[1<<depth];
+			for(int i=0;i<(1<<depth);i++){
+				if(colused[i]){
+					colmap[i] = next_open++;
+				}
+			}
+			for(int i=0;i<size;i++){
+				data[i] = colmap[data[i]];
+			}
+		}
+	}
+
 	uint32_t prob_bits = 15;
 
 	uint32_t* dummy1;
@@ -378,6 +408,19 @@ int layer_encode(
 		0b0000000000010000,
 		&chunk_size
 	);
+	/*{
+		uint32_t colused[1<<depth];
+		for(int i=0;i<(1<<depth);i++){
+			colused[i] = 0;
+		}
+		for(int i=0;i<size;i++){
+			colused[predict[i]]++;
+		}
+		printf(".......\n");
+		for(int i=0;i<(1<<depth);i++){
+			printf("%d \n",colused[i]);
+		}
+	}*/
 
 	uint16_t* predict_cleaned;
 	size_t cleaned_pointer;
@@ -613,7 +656,7 @@ int layer_encode(
 	delete[] predict_cleaned;
 
 	//printf("layer cost %d\n",(int)possible_size);
-	return possible_size + 1 + tile_cost;
+	return possible_size + 1 + tile_cost + compaction_overhead;
 }
 
 int count_colours(uint8_t* in_bytes, size_t in_size){
@@ -811,7 +854,6 @@ size_t encode_tile(
 		uint16_t* BLUE_G = new uint16_t[split_size];
 		subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
-		//palette_compact(GREEN,split_size);//costs 32 bytes, but who's counting?
 		int green_size = layer_encode(
 			GREEN,
 			split_size,
@@ -990,10 +1032,10 @@ int main(int argc, char *argv[]){
 	size_t tile_size = 0;
 
 	if((width >= 512 || height >= 512) && width >= 256 && height >= 256){
-		out_buf[out_start++] = 1;
-		out_buf[out_start++] = 1;
 		int x_tiles = (width ) / 256;
 		int y_tiles = (height) / 256;
+		out_buf[out_start++] = x_tiles - 1;
+		out_buf[out_start++] = y_tiles - 1;
 		int tile_width  = (width  + x_tiles - 1)/x_tiles;
 		int tile_height = (height + y_tiles - 1)/y_tiles;
 		for(int i=0;i<x_tiles*y_tiles;i++){
@@ -1018,7 +1060,7 @@ int main(int argc, char *argv[]){
 				}
 			}
 			uint8_t* tile_buf;
-			tile_size += encode_tile(
+			size_t this_tile = encode_tile(
 				new_bytes,
 				new_size*3,
 				tile_buf,
@@ -1026,13 +1068,13 @@ int main(int argc, char *argv[]){
 				new_height,
 				cruncher_mode
 			);
+			tile_size += this_tile;
+			if(i+1 != x_tiles*y_tiles){
+				write_varint(out_buf, &out_start, this_tile);
+			}
 			delete[] tile_buf;
 			delete[] new_bytes;
 		}
-
-		write_varint(out_buf, &out_start, 2000);//fill in some offsets later
-		write_varint(out_buf, &out_start, 2000);
-		write_varint(out_buf, &out_start, 2000);
 	}
 	else{
 		uint8_t* tile_buf;
