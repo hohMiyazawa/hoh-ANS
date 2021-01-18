@@ -149,7 +149,7 @@ uint16_t* channelpredict_fastpath(
 			uint16_t T = top_row[x_m];
 			uint16_t TL = forige_TL;
 
-			out_buf[index++] = data[datalocation] - median(T,L,T+L-TL) + centre;
+			out_buf[index++] = (data[datalocation] - median(T,L,T+L-TL) + centre/2 + centre) % centre;
 
 			forige_TL = top_row[x_m];
 			top_row[x_m] = data[datalocation];
@@ -248,7 +248,7 @@ uint16_t* channelpredict_section(
 				average3(T,T,TR),
 				average3(T,TR,TR)
 			};
-			out_buf[index++] = data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + tile_width - 1) % tile_width]]) + centre;
+			out_buf[index++] = (data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + tile_width - 1) % tile_width]]) + centre/2 + centre) % centre;
 			forige_TL = top_row[x_m];
 			top_row[x_m] = data[datalocation];
 			forige = data[datalocation];
@@ -323,7 +323,7 @@ uint16_t* channelpredict_all(
 				average3(T,T,TR),
 				average3(T,TR,TR)
 			};
-			out_buf[index++] = data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + width - 1) % width]]) + centre;
+			out_buf[index++] = (data[datalocation] - midpoint(predictions[best_pred[x_m]],predictions[best_pred[(x_m + width - 1) % width]]) + centre/2 + centre) % centre;
 			forige_TL = top_row[x_m];
 			top_row[x_m] = data[datalocation];
 			forige = data[datalocation];
@@ -390,12 +390,12 @@ int layer_encode(
 		}
 	}
 
-	size_t maximum_size = 10 + (1<<(depth + 1))*2 + (cleaned_pointer*(depth + 1) + 8 - 1)/8;
+	size_t maximum_size = 10 + (1<<(depth))*2 + (cleaned_pointer*(depth) + 8 - 1)/8;
 	uint8_t* dummyrand = new uint8_t[maximum_size];
 	size_t channel_size_lz = encode_entropy(
 		predict_cleaned,
 		cleaned_pointer,
-		1<<(depth + 1),
+		1<<(depth),
 		dummyrand,
 		prob_bits
 	);
@@ -407,25 +407,25 @@ int layer_encode(
 	int total_tiles = 1;
 	int tile_cost = 2;
 	if(cruncher_mode){
-		int freqs[1<<(depth + 1)];
-		for(int i=0;i < (1<<(depth + 1));i++){
+		int freqs[1<<(depth)];
+		for(int i=0;i < (1<<(depth));i++){
 			freqs[i] = 1;//to have no zero values, so the frequency table is usable for other predictors
 		}
 		for(int i=0;i<size;i++){
 			freqs[predict[i]]++;
 		}
-		/*for(int i=0;i < (1<<(depth + 1));i++){
+		/*for(int i=0;i < (1<<(depth));i++){
 			printf("f %d\n",freqs[i]);
 		}*/
-		double entropy[1<<(depth + 1)];
-		for(int i=0;i < (1<<(depth + 1));i++){
+		double entropy[1<<(depth)];
+		for(int i=0;i < (1<<(depth));i++){
 			entropy[i] = -std::log2((double)freqs[i]/(double)size);
 		}
-		/*for(int i=0;i < (1<<(depth + 1));i++){
+		/*for(int i=0;i < (1<<(depth));i++){
 			printf("f %f\n",entropy[i]);
 		}*/
 		double total_entropy = 0;
-		for(int i=0;i < (1<<(depth + 1));i++){
+		for(int i=0;i < (1<<(depth));i++){
 			total_entropy += entropy[i] * (freqs[i] - 1);
 		}
 		//printf("total entropy 1 %f\n",total_entropy/8);
@@ -499,17 +499,17 @@ int layer_encode(
 		);
 		if(cruncher_mode > 2){//refine estimate
 
-			for(int i=0;i < (1<<(depth + 1));i++){
+			for(int i=0;i < (1<<(depth));i++){
 				freqs[i] = 1;
 			}
 			for(int i=0;i<size;i++){
 				freqs[predict[i]]++;
 			}
-			for(int i=0;i < (1<<(depth + 1));i++){
+			for(int i=0;i < (1<<(depth));i++){
 				entropy[i] = -std::log2((double)freqs[i]/(double)size);
 			}
 			total_entropy = 0;
-			for(int i=0;i < (1<<(depth + 1));i++){
+			for(int i=0;i < (1<<(depth));i++){
 				total_entropy += entropy[i] * (freqs[i] - 1);
 			}
 			//printf("total entropy 3 %f\n",total_entropy/8);
@@ -561,14 +561,14 @@ int layer_encode(
 		size_t temp_size1 = encode_entropy(
 			predict_cleaned,
 			cleaned_pointer,
-			1<<(depth + 1),
+			1<<(depth),
 			dummyrand,
 			16
 		);
 		size_t temp_size2 = encode_entropy(
 			predict_cleaned,
 			cleaned_pointer,
-			1<<(depth + 1),
+			1<<(depth),
 			dummyrand,
 			15
 		);
@@ -580,7 +580,7 @@ int layer_encode(
 				temp_size = encode_entropy(
 					predict_cleaned,
 					cleaned_pointer,
-					1<<(depth + 1),
+					1<<(depth),
 					dummyrand,
 					i
 				);
@@ -597,7 +597,7 @@ int layer_encode(
 				temp_size = encode_entropy(
 					predict_cleaned,
 					cleaned_pointer,
-					1<<(depth + 1),
+					1<<(depth),
 					dummyrand,
 					i
 				);
