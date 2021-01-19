@@ -1038,6 +1038,10 @@ int main(int argc, char *argv[]){
 		out_buf[out_start++] = y_tiles - 1;
 		int tile_width  = (width  + x_tiles - 1)/x_tiles;
 		int tile_height = (height + y_tiles - 1)/y_tiles;
+
+		uint8_t* tile_queue[x_tiles*y_tiles];
+		size_t tile_queue_sizes[x_tiles*y_tiles];
+
 		for(int i=0;i<x_tiles*y_tiles;i++){
 			int new_width = tile_width;
 			int new_height = tile_height;
@@ -1059,21 +1063,27 @@ int main(int argc, char *argv[]){
 					new_bytes[(y*new_width + x)*3 + 2] = in_bytes[((y + y_offset)*width + x_offset + x)*3 + 2];
 				}
 			}
-			uint8_t* tile_buf;
-			size_t this_tile = encode_tile(
+			uint8_t* written_location;
+			tile_queue_sizes[i] = encode_tile(
 				new_bytes,
 				new_size*3,
-				tile_buf,
+				written_location,
 				new_width,
 				new_height,
 				cruncher_mode
 			);
-			tile_size += this_tile;
+			tile_queue[i] = written_location;
 			if(i+1 != x_tiles*y_tiles){
-				write_varint(out_buf, &out_start, this_tile);
+				write_varint(out_buf, &out_start, tile_queue_sizes[i]);
 			}
-			delete[] tile_buf;
 			delete[] new_bytes;
+		}
+		for(int i=0;i<x_tiles*y_tiles;i++){
+			for(size_t j=0;j<tile_queue_sizes[i];j++){//TODO pass actual data
+				//out_buf[out_start++] = tile_queue[i][j];
+				out_buf[out_start++] = 0;
+			}
+			delete tile_queue[i];
 		}
 	}
 	else{

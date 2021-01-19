@@ -139,7 +139,7 @@ size_t encode_entropy(
 				(uint32_t)upper_clamps[i],
 				maximum_bits_per_symbol
 			);
-			printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
+			//printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
 		}
 		for(int i=0;i<range;i++){
 			uint8_t symbol_bits = 0;
@@ -195,7 +195,7 @@ size_t encode_entropy(
 	Rans64EncFlush(&rans, &ptr);
 	uint32_t* rans_begin = ptr;
 
-	printf("---rANS size: %d\n",(int)((out_end - rans_begin)*4));
+	//printf("---rANS size: %d\n",(int)((out_end - rans_begin)*4));
 	write_varint(output_bytes, &entropy_size, (out_end - rans_begin)*4);
 
 	while(rans_begin < out_end){
@@ -217,14 +217,14 @@ size_t encode_entropy(
 	}
 
 //diagnostics
-///*
+/*
 	printf("entropy_mode       : %d\n",(int)entropy_mode);
 	printf("prob_bits          : %d\n",(int)prob_bits);
 	printf("table_storage_mode : %d\n",(int)table_storage_mode);
 	printf("range              : %d\n",(int)range);
 	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
 	printf("symbols            : %d\n",(int)symbol_size);
-//*/
+*/
 	
 	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
