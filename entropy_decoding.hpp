@@ -26,6 +26,15 @@ uint16_t* decode_entropy(
 
 	uint16_t* decoded = new uint16_t[*symbol_size];
 
+//diagnostics
+///*
+	printf("entropy_mode       : %d\n",(int)entropy_mode);
+	printf("prob_bits          : %d\n",(int)prob_bits);
+	printf("table_storage_mode : %d\n",(int)table_storage_mode);
+	printf("range              : %d\n",(int)symbol_range);
+	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+//*/
+
 	if(entropy_mode){
 		uint32_t freqs[symbol_range];
 		uint32_t cum_freqs[symbol_range + 1];
@@ -49,6 +58,9 @@ uint16_t* decode_entropy(
 					maximum_bits_per_symbol
 				);
 			}
+			/*for(int i=0;i<symbol_range;i++){
+				printf("%d\n",(int)freqs[i]);
+			}*/
 			calc_cum_freqs(freqs,cum_freqs, symbol_range);
 		}
 		else if(table_storage_mode == 2){

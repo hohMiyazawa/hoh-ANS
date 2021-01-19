@@ -82,7 +82,17 @@ uint32_t unstuffer(
 		*remainder = (*remainder) % (1 << (*bits_remaining));
 	}
 	else{
-		//more logic here
+		bits = bits - *bits_remaining;
+		value = (*remainder)<<bits;
+		*remainder = bytes[(*location)++];
+		*bits_remaining = 8;
+		return value + unstuffer(
+			bytes,
+			location,
+			remainder,
+			bits_remaining,
+			bits
+		);
 	}
 	return value;
 }

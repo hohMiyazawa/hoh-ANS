@@ -100,7 +100,7 @@ size_t encode_entropy(
 	expected_clamped_size = (expected_clamped_size + 8 - 1)/8;
 	//printf("tab %d %d\n",(int)expected_raw_size,(int)expected_clamped_size);
 
-	if(1/*remove when decoder ready*/ || (expected_raw_size < expected_clamped_size)){
+	if(0/*remove when decoder ready*/ || (expected_raw_size < expected_clamped_size)){
 		output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 1;
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte;
@@ -167,8 +167,8 @@ size_t encode_entropy(
 			output_bytes[entropy_size++] = current_byte;
 		}
 	}
-
 //end encode table
+
 	static size_t out_max_size = 32<<20; // 32MB
 	static size_t out_max_elems = out_max_size / sizeof(uint32_t);
 	uint32_t* out_buf = new uint32_t[out_max_elems];
@@ -190,6 +190,8 @@ size_t encode_entropy(
 	}
 	Rans64EncFlush(&rans, &ptr);
 	uint32_t* rans_begin = ptr;
+
+	write_varint(output_bytes, &entropy_size, (out_end - rans_begin)*4);
 
 	while(rans_begin < out_end){
 		output_bytes[entropy_size++] = (uint8_t)((*rans_begin)>>24);
