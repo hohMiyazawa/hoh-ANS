@@ -749,7 +749,6 @@ size_t encode_tile(
 	int cruncher_mode
 ){
 	size_t out_max_size = in_size + 256;//safety margin
-	out_buf = new uint8_t[out_max_size];
 	size_t out_start = 0;
 
 	// 1x1 tile image
@@ -812,7 +811,9 @@ size_t encode_tile(
 
 	int best_size;
 	int internal_colour_mode = 2;//rgb default
+	uint8_t channel_number = 3;
 	if(grey_test(in_bytes, in_size)){
+		channel_number = 1;
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
 		if(binary_test(binary, in_size/3)){
 			binarize(binary, in_size/3);
@@ -943,10 +944,12 @@ size_t encode_tile(
 		if(palette_size != -1 && palette_size + lz_external_overhead < best_size){
 			best_size = palette_size + lz_external_overhead;
 			internal_colour_mode = 127;//indexed
+			channel_number = 1;
 		}
 		if(rgb_size != -1 && rgb_size + lz_external_overhead < best_size){
 			best_size = rgb_size + lz_external_overhead;
 			internal_colour_mode = 2;//rgb
+			channel_number = 3;
 		}
 	}
 	out_buf[out_start++] = internal_colour_mode;
@@ -958,11 +961,23 @@ size_t encode_tile(
 	uint8_t l_z_bulk = 0;//not really true
 	uint8_t l_z_rans = 1;
 	out_buf[out_start++] = use_lempel + (l_z_backref<<1) + (l_z_bulk<<2) + (l_z_rans<<3);
+
+	//never reorder
+	if(channel_number == 3){
+		out_buf[out_start++] = 36;
+	}
+	else if(channel_number == 2){
+		out_buf[out_start++] = 4;
+	}
+	else{
+		out_buf[out_start++] = 0;
+	}
 	
 
 	delete[] LEMPEL;
 	delete[] LEMPEL_NUKE;
 
+	//printf("marigin %d %d\n",out_max_size,out_start + best_size);
 	return out_start + best_size;
 }
 
@@ -1063,7 +1078,8 @@ int main(int argc, char *argv[]){
 					new_bytes[(y*new_width + x)*3 + 2] = in_bytes[((y + y_offset)*width + x_offset + x)*3 + 2];
 				}
 			}
-			uint8_t* written_location;
+			size_t out_max_size = (new_size*3) + 256;//safety margin
+			uint8_t* written_location = new uint8_t[out_max_size];
 			tile_queue_sizes[i] = encode_tile(
 				new_bytes,
 				new_size*3,
@@ -1080,8 +1096,7 @@ int main(int argc, char *argv[]){
 		}
 		for(int i=0;i<x_tiles*y_tiles;i++){
 			for(size_t j=0;j<tile_queue_sizes[i];j++){//TODO pass actual data
-				//out_buf[out_start++] = tile_queue[i][j];
-				out_buf[out_start++] = 0;
+				out_buf[out_start++] = tile_queue[i][j];
 			}
 			delete tile_queue[i];
 		}

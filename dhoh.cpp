@@ -34,14 +34,14 @@ uint8_t* decode_channel(
 	uint8_t* decoded = new uint8_t[width*height];
 	uint8_t colour_map[1<<bit_depth];
 	if(compaction_mode == 0){
-		printf("no channel compaction\n");
+		printf("    no channel compaction\n");
 		//as-is
 		for(int i=0;i<(1<<bit_depth);i++){
 			colour_map[i] = i;
 		}
 	}
 	else if(compaction_mode == 1){
-		printf("clamped channel\n");
+		printf("    clamped channel\n");
 		//clamping
 		if(bit_depth == 8){
 			uint8_t clamp1 = in_bytes[byte_pointer++];
@@ -57,7 +57,7 @@ uint8_t* decode_channel(
 		}
 	}
 	else if(compaction_mode == 2){
-		printf("bitmasked channel\n");
+		printf("    bitmasked channel\n");
 		//bitmask
 		uint8_t bitmask[(1<<bit_depth)/8];
 		for(int i=0;i<(1<<bit_depth)/8;i++){
@@ -126,7 +126,7 @@ uint8_t* decode_tile(
 		printf("tile offset 0: 0\n");
 		for(int i=1;i<x_tiles*y_tiles;i++){
 			offsets[i] = read_varint(in_bytes, &byte_pointer);
-			printf("tile offset %d: %d\n",i,offsets[i]);
+			printf("  tile offset %d: %d\n",i,offsets[i]);
 		}
 
 		int tile_width = (width + x_tiles - 1)/x_tiles;
@@ -164,7 +164,7 @@ uint8_t* decode_tile(
 		return decoded;
 	}
 	else{
-		printf("single tile image\n");
+		printf("single tile %dx%d\n",(int)width,(int)height);
 	}
 	if(bit_depth > 8){
 		printf("high bit depth not implemented!\n");
@@ -172,49 +172,49 @@ uint8_t* decode_tile(
 	uint8_t pixel_format_internal = in_bytes[byte_pointer++];
 	uint8_t channel_number_internal = 1;
 	if(pixel_format == 0){
-		printf("internal pixel format: bit\n");
+		printf("  internal pixel format: bit\n");
 	}
 	else if(pixel_format_internal == 1){
-		printf("internal pixel format: greyscale\n");
+		printf("  internal pixel format: greyscale\n");
 	}
 	else if(pixel_format_internal == 2){
-		printf("internal pixel format: rgb\n");
+		printf("  internal pixel format: rgb\n");
 		channel_number_internal = 3;
 	}
 	else if(pixel_format_internal == 3){
-		printf("internal pixel format: greyscale + alpha\n");
+		printf("  internal pixel format: greyscale + alpha\n");
 		channel_number_internal = 2;
 	}
 	else if(pixel_format_internal == 4){
-		printf("internal pixel format: rgb + alpha\n");
+		printf("  internal pixel format: rgb + alpha\n");
 		channel_number_internal = 4;
 	}
 	else if(pixel_format_internal == 127){
-		printf("internal pixel format: indexed\n");
+		printf("  internal pixel format: indexed\n");
 		int index_size = read_varint(in_bytes, &byte_pointer);
-		printf("index length: %d\n",index_size);
+		printf("  index length: %d\n",index_size);
 	}
 	else if(pixel_format_internal == 128){
-		printf("internal pixel format: subgreen\n");
+		printf("  internal pixel format: subgreen\n");
 		channel_number_internal = 3;
 	}
 	else if(pixel_format_internal == 129){
-		printf("internal pixel format: YIQ\n");
+		printf("  internal pixel format: YIQ\n");
 		channel_number_internal = 3;
 	}
 	else if(pixel_format_internal == 130){
-		printf("internal pixel format: subgreen + alpha\n");
+		printf("  internal pixel format: subgreen + alpha\n");
 		channel_number_internal = 4;
 	}
 	else if(pixel_format_internal == 131){
-		printf("internal pixel format: YIQ + alpha\n");
+		printf("  internal pixel format: YIQ + alpha\n");
 		channel_number_internal = 4;
 	}
 	else if(pixel_format_internal == 255){
-		printf("invalid internal pixel format!\n");
+		printf("  invalid internal pixel format!\n");
 	}
 	else{
-		printf("unknown pixel format!\n");
+		printf("  unknown pixel format %d!\n",(int)pixel_format_internal);
 	}
 	uint8_t lempel_ziv_mode = in_bytes[byte_pointer++];
 	uint8_t has_lempel_ziv   = (lempel_ziv_mode & 0b00000001);
@@ -222,27 +222,27 @@ uint8_t* decode_tile(
 	uint8_t bundled_channels = (lempel_ziv_mode & 0b00000100)>>2;
 	uint8_t lempel_ziv_rans  = (lempel_ziv_mode & 0b00001000)>>3;
 	if(has_lempel_ziv == 0){
-		printf("no Lempel-Ziv transform\n");
+		printf("  no Lempel-Ziv transform\n");
 	}
 	else{
-		printf("Lempel-Ziv transform\n");
+		printf("  Lempel-Ziv transform\n");
 		if(backref_size){
-			printf("  backref: 16bit\n");
+			printf("    backref: 16bit\n");
 		}
 		else{
-			printf("  backref: 8bit\n");
+			printf("    backref: 8bit\n");
 		}
 		if(bundled_channels){
-			printf("  bulk: yes\n");
+			printf("    bulk: yes\n");
 		}
 		else{
-			printf("  bulk: no\n");
+			printf("    bulk: no\n");
 		}
 		if(lempel_ziv_rans){
-			printf("  rANS: yes\n");
+			printf("    rANS: yes\n");
 		}
 		else{
-			printf("  rANS: no\n");
+			printf("    rANS: no\n");
 		}
 	}
 
@@ -268,21 +268,21 @@ uint8_t* decode_tile(
 		uint8_t bit2 = channel_reordering & 2;
 		if(bit1 == 0 && bit2 == 0){
 			//conjoined
-			printf("conjoined channels\n");
+			printf("  conjoined channels\n");
 		}
 		else if(bit1 == 0 && bit2 == 1){
 			//regular order
 			int offset = read_varint(in_bytes, &byte_pointer);
-			printf("regular channel layout\n");
+			printf("  regular channel layout\n");
 		}
 		else if(bit1 == 1 && bit2 == 0){
 			//inverse order
 			int offset = read_varint(in_bytes, &byte_pointer);
-			printf("inverse channel layout\n");
+			printf("  inverse channel layout\n");
 		}
 		else{
 			//illegal
-			printf("illegal channel layout!\n");
+			printf("  illegal channel layout!\n");
 		}
 	}
 	else if(channel_number_internal == 3){
@@ -294,16 +294,16 @@ uint8_t* decode_tile(
 		int offset2;
 		if(bit1 == 0 && bit2 == 0 && bit3 == 0){
 			//conjoined (consider using greyscale internally)
-			printf("conjoined channels\n");
+			printf("  conjoined channels\n");
 		}
 		else if(bit1 != bit2 && bit1 != bit3){
 			offset1 = read_varint(in_bytes, &byte_pointer);
 			offset2 = read_varint(in_bytes, &byte_pointer);
-			printf("channel order: %d %d %d\n",(int)bit1,(int)bit2,(int)bit3);
+			printf("  channel order: %d %d %d\n",(int)bit1,(int)bit2,(int)bit3);
 		}
 		else{
 			offset1 = read_varint(in_bytes, &byte_pointer);
-			printf("semi-conjoined channels\n");
+			printf("  semi-conjoined channels\n");
 		}
 
 		//conjoined channels not decoded

@@ -25,7 +25,7 @@ varint, height-1
 ---
 
 header notes:
-	- when multiple planes exists, the order is alpha > green > red > blue
+	- when multiple planes exists, the order is alpha > green > red > blue, unless the "channel reordering" number shuffles that around.
 	- for "0", no image data is stored, it's still a valid image
 	- there's no arbitrary metadata. This is not a complete image format, and should be wrapped.
 	- reading the first 16 bytes should give all header information, unless the image is billions of pixels wide and high.
