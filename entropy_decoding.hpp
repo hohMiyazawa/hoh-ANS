@@ -39,7 +39,7 @@ uint16_t* decode_entropy(
 	if(entropy_mode){
 		uint32_t freqs[symbol_range];
 		uint32_t cum_freqs[symbol_range + 1];
-		Rans64DecSymbol dsyms[symbol_range];
+
 		uint8_t slag = 0;
 		uint8_t slag_bits = 0;
 		if(table_storage_mode == 0){
@@ -109,6 +109,7 @@ uint16_t* decode_entropy(
 					symbol_bits
 				);
 			}
+			calc_cum_freqs(freqs,cum_freqs, symbol_range);
 		}
 		else if(table_storage_mode == 3){
 			printf("unimplemented frequency table storage mode!\n");
@@ -116,9 +117,12 @@ uint16_t* decode_entropy(
 		else{
 			printf("unknown frequency table storage mode!\n");
 		}
+		Rans64DecSymbol dsyms[symbol_range];
+
 		size_t data_size = read_varint(in_bytes, byte_pointer);
 		printf("---rANS size: %d\n",(int)data_size);
 		for(int i=0; i < symbol_range; i++) {
+			//printf("        dsyms %d %d\n",(int)cum_freqs[i], (int)freqs[i]);
 			Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);
 		}
 		uint16_t cum2sym[1<<prob_bits];
@@ -127,7 +131,6 @@ uint16_t* decode_entropy(
 		   		 cum2sym[i] = s;
 			}
 		}
-
 		Rans64State rans;
 		uint32_t* ptr = (uint32_t*)(in_bytes + *byte_pointer);
 		Rans64DecInit(&rans, &ptr);
