@@ -1,4 +1,6 @@
+echo "entropy encoding..."
 ./simple_entropy_encoder simple_entropy_encoder.cpp tmp_compressed
+echo "entropy decoding..."
 ./simple_entropy_decoder tmp_compressed tmp_decompressed
 if cmp -s simple_entropy_encoder.cpp tmp_decompressed ; then
 	echo "\033[0;32mEntropy roundtrip: OK\033[0m"

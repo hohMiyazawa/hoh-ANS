@@ -14,10 +14,15 @@ simple_entropy_encoder: simple_entropy_encoder.cpp file_io.hpp rans64.hpp entrop
 simple_entropy_decoder: simple_entropy_decoder.cpp file_io.hpp rans64.hpp entropy_decoding.hpp varint.hpp stattools.hpp
 	g++ -o $@ $< -O3 $(LIBS)
 
-tests: pre_tests entropy_roundtrip
+tests: pre_tests entropy_roundtrip rgb_roundtrip
 
 pre_tests:
 	@echo "---TESTS---"
 
 entropy_roundtrip: entropy_roundtrip_test.sh simple_entropy_encoder simple_entropy_decoder
 	@./entropy_roundtrip_test.sh
+	@echo ""
+
+rgb_roundtrip: rgb_roundtrip_test.sh choh dhoh
+	@./rgb_roundtrip_test.sh
+	@echo ""
