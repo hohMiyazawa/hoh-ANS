@@ -12,27 +12,35 @@ size_t read_varint(uint8_t* bytes, size_t* location){//incorrect implentation! o
 		if(second_byte & (1<<7)){
 			uint8_t third_byte = bytes[*location];
 			*location = *location + 1;
+			//printf("dvar %d %d %d\n",(int)first_byte,(int)second_byte,(int)third_byte);
 			return (((size_t)first_byte & 0b01111111) << 14) + (((size_t)second_byte & 0b01111111) << 7) + third_byte;
 		}
 		else{
+			//printf("dvar %d %d\n",(int)first_byte,(int)second_byte);
 			return (((size_t)first_byte & 0b01111111) << 7) + second_byte;
 		}
 	}
 	else{
+		//printf("dvar %d\n",(int)first_byte);
 		return (size_t)first_byte;
 	}
 }
 
 void write_varint(uint8_t* bytes, size_t* location, size_t value){//must be improved
-	if(value < 128){
-		bytes[*location] = (uint8_t)value;
-		*location = *location + 1;
+	if(value < (1<<7)){
+		bytes[(*location)++] = (uint8_t)value;
+		//printf("varint %d, %d\n",value,value);
 	}
-	else if(value < (1<<13)){
-		bytes[*location] = (uint8_t)((value>>7) + 128);
-		*location = *location + 1;
-		bytes[*location] = (uint8_t)(value % 128);
-		*location = *location + 1;
+	else if(value < (1<<14)){
+		bytes[(*location)++] = (uint8_t)((value>>7) + 128);
+		bytes[(*location)++] = (uint8_t)(value % 128);
+		//printf("varint %d, %d %d\n",value,(uint8_t)((value>>7) + 128),(uint8_t)(value % 128));
+	}
+	else if(value < (1<<21)){
+		bytes[(*location)++] = (uint8_t)((value>>14) + 128);
+		bytes[(*location)++] = (uint8_t)(((value>>7) % 128) + 128);
+		bytes[(*location)++] = (uint8_t)(value % 128);
+		//printf("varint %d, %d %d %d\n",value,(uint8_t)((value>>14) + 128),(uint8_t)(((value>>7) % 128) + 128),(uint8_t)(value % 128));
 	}
 }
 
@@ -57,8 +65,8 @@ void stuffer(
 		if(bits > 8){
 			uint32_t top = value>>8;
 			uint32_t bottom = value % 256;
-			stuffer(bytes,location,remainder,bits_remaining,top,bits - 8);
-			stuffer(bytes,location,remainder,bits_remaining,bottom,8);
+			stuffer(bytes, location, remainder, bits_remaining, top,    bits - 8);
+			stuffer(bytes, location, remainder, bits_remaining, bottom, 8);
 		}
 		else{
 			bytes[(*location)++] = *remainder + (uint8_t)(value>>(bits - *bits_remaining));

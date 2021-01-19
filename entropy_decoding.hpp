@@ -33,6 +33,7 @@ uint16_t* decode_entropy(
 	printf("table_storage_mode : %d\n",(int)table_storage_mode);
 	printf("range              : %d\n",(int)symbol_range);
 	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+	printf("symbols            : %d\n",(int)(*symbol_size));
 //*/
 
 	if(entropy_mode){
@@ -64,6 +65,49 @@ uint16_t* decode_entropy(
 			calc_cum_freqs(freqs,cum_freqs, symbol_range);
 		}
 		else if(table_storage_mode == 2){
+			int clamp_number = ((prob_bits - 1)/4 + 2);
+			uint32_t lower_clamps[clamp_number];
+			uint32_t upper_clamps[clamp_number];
+			for(int i=0;i<clamp_number;i++){
+				lower_clamps[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
+				upper_clamps[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
+			}
+			for(int i=0;i<symbol_range;i++){
+				uint8_t symbol_bits = 0;
+				if(lower_clamps[0] <= i && upper_clamps[0] >= i){
+					symbol_bits = 1;
+				}
+				if(lower_clamps[1] <= i && upper_clamps[1] >= i){
+					symbol_bits = 4;
+				}
+				for(int j=2;j<clamp_number;j++){
+					if(lower_clamps[j] <= i && upper_clamps[j] >= i){
+						symbol_bits = 4*j;
+					}
+				}
+				if(symbol_bits > prob_bits){
+					symbol_bits = prob_bits;
+				}
+				freqs[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					symbol_bits
+				);
+			}
 		}
 		else if(table_storage_mode == 3){
 		}

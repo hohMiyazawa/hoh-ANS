@@ -12,6 +12,8 @@ size_t encode_entropy(
 	uint8_t* output_bytes,
 	uint32_t prob_bits
 ){
+	uint8_t entropy_mode;
+	uint8_t table_storage_mode = 0;
 	size_t entropy_size = 0;
 	if(symbol_size == 0){
 		write_varint(output_bytes, &entropy_size, range-1);
@@ -101,7 +103,9 @@ size_t encode_entropy(
 	//printf("tab %d %d\n",(int)expected_raw_size,(int)expected_clamped_size);
 
 	if(0/*remove when decoder ready*/ || (expected_raw_size < expected_clamped_size)){
-		output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 1;
+		entropy_mode = 1;
+		table_storage_mode = 1;
+		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte;
 		for(int i=0;i<range;i++){
@@ -112,7 +116,9 @@ size_t encode_entropy(
 		}
 	}
 	else{
-		output_bytes[entropy_size++] = (1<<7) + (prob_bits<<2) + 2;
+		entropy_mode = 1;
+		table_storage_mode = 2;
+		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte;
 		for(int i=0;i<((prob_bits - 1)/4 + 2);i++){
@@ -206,11 +212,22 @@ size_t encode_entropy(
 	delete[] out_buf;
 
 	if(expected_stored_size < entropy_size){
+		entropy_mode = 0;
 		entropy_size = 0;
 		write_varint(output_bytes, &entropy_size, range-1);
 		write_varint(output_bytes, &entropy_size, symbol_size);
 		output_bytes[entropy_size++] = 0;
 	}
+
+//diagnostics
+///*
+	printf("entropy_mode       : %d\n",(int)entropy_mode);
+	printf("prob_bits          : %d\n",(int)prob_bits);
+	printf("table_storage_mode : %d\n",(int)table_storage_mode);
+	printf("range              : %d\n",(int)range);
+	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+	printf("symbols            : %d\n",(int)symbol_size);
+//*/
 	
 	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
