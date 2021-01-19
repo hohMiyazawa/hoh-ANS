@@ -83,6 +83,7 @@ uint16_t* decode_entropy(
 					&slag_bits,
 					maximum_bits_per_symbol
 				);
+				printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
 			}
 			for(int i=0;i<symbol_range;i++){
 				uint8_t symbol_bits = 0;
@@ -110,11 +111,13 @@ uint16_t* decode_entropy(
 			}
 		}
 		else if(table_storage_mode == 3){
+			printf("unimplemented frequency table storage mode!\n");
 		}
 		else{
 			printf("unknown frequency table storage mode!\n");
 		}
 		size_t data_size = read_varint(in_bytes, byte_pointer);
+		printf("---rANS size: %d\n",(int)data_size);
 		for(int i=0; i < symbol_range; i++) {
 			Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);
 		}
