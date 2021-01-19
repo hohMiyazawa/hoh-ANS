@@ -66,4 +66,23 @@ void stuffer(
 	}
 }
 
+uint32_t unstuffer(
+	uint8_t* bytes,
+	size_t* location,
+	uint8_t* remainder,
+	uint8_t* bits_remaining,
+	uint8_t bits
+){
+	uint32_t value = 0;
+	if(bits <= *bits_remaining){
+		*bits_remaining = *bits_remaining - bits;
+		value = (*remainder)>>(*bits_remaining);
+		*remainder = (*remainder) % (1 << (*bits_remaining));
+	}
+	else{
+		//more logic here
+	}
+	return value;
+}
+
 #endif //VARINT_HEADER

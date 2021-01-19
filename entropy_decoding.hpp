@@ -3,6 +3,7 @@
 
 #include "rans64.hpp"
 #include "varint.hpp"
+#include "stattools.hpp"
 
 uint16_t* decode_entropy(
 	uint8_t* in_bytes,
@@ -24,13 +25,19 @@ uint16_t* decode_entropy(
 		uint32_t freqs[symbol_range];
 		uint32_t cum_freqs[symbol_range + 1];
 		Rans64DecSymbol dsyms[symbol_range];
-
+		uint8_t slag = 0;
+		uint8_t slag_bits = 0;
 		if(table_storage_mode == 0){
 			for(int i=0;i<symbol_range;i++){
 				freqs[i] = 1;
 			}
+			normalize_freqs(freqs,cum_freqs,symbol_range,1<<prob_bits);
 		}
 		else if(table_storage_mode == 1){
+			//raw values for freqs
+			for(int i=0;i<symbol_range;i++){
+				
+			}
 		}
 		else if(table_storage_mode == 2){
 		}
