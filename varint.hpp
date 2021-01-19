@@ -1,6 +1,8 @@
 #ifndef VARINT_HEADER
 #define VARINT_HEADER
 
+#include <string.h>
+
 size_t read_varint(uint8_t* bytes, size_t* location){//incorrect implentation! only works up to three bytes/21bit numbers!
 	uint8_t first_byte = bytes[*location];
 	*location = *location + 1;

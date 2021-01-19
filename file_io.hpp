@@ -2,6 +2,7 @@
 #define FILE_IO_HEADER
 
 #include <fstream>
+#include <stdarg.h>
 
 static void panic(const char *fmt, ...){
 	va_list arg;

@@ -1,6 +1,8 @@
 #ifndef STATTOOLS_HEADER
 #define STATTOOLS_HEADER
 
+#include <assert.h>
+
 void calc_cum_freqs(uint32_t* freqs,uint32_t* cum_freqs, size_t size){
 	cum_freqs[0] = 0;
 	for (size_t i=0; i < size; i++){

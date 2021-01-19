@@ -14,6 +14,11 @@ uint16_t* decode_entropy(
 	size_t symbol_range = read_varint(in_bytes, byte_pointer)+1;
 	*symbol_size = read_varint(in_bytes, byte_pointer);
 
+	uint8_t maximum_bits_per_symbol = 0;
+	for(size_t check = (symbol_range - 1);check;check = (check>>1)){
+		maximum_bits_per_symbol++;
+	}
+
 	uint8_t metadata = in_bytes[(*byte_pointer)++];
 	uint8_t entropy_mode = metadata>>7;
 	uint8_t prob_bits = (metadata & 0b00111100)>>2;
@@ -36,8 +41,15 @@ uint16_t* decode_entropy(
 		else if(table_storage_mode == 1){
 			//raw values for freqs
 			for(int i=0;i<symbol_range;i++){
-				
+				freqs[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
 			}
+			calc_cum_freqs(freqs,cum_freqs, symbol_range);
 		}
 		else if(table_storage_mode == 2){
 		}
@@ -74,6 +86,26 @@ uint16_t* decode_entropy(
 		}
 	}
 	return decoded;
+}
+
+uint8_t* decode_entropy_8bit(//make dedicated 8bit version later
+	uint8_t* in_bytes,
+	size_t in_size,
+	size_t* byte_pointer,
+	size_t* symbol_size
+){
+	uint16_t* decoded = decode_entropy(
+		in_bytes,
+		in_size,
+		byte_pointer,
+		symbol_size
+	);
+	uint8_t* decoded2 = new uint8_t[*symbol_size];
+	for(size_t i=0;i<(*symbol_size);i++){
+		decoded2[i] = (uint8_t)decoded[i];
+	}
+	delete[] decoded;
+	return decoded2;
 }
 
 #endif //ENTROPY_DECODING_HEADER
