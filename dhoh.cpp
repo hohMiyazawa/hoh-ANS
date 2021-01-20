@@ -120,10 +120,10 @@ uint8_t* decode_tile(
 	uint8_t* decoded = new uint8_t[width*height*channel_number];
 
 	if(x_tiles != 1 || y_tiles != 1){
-		printf("tiled image: %dx%d\n",(int)x_tiles,(int)y_tiles);
+		printf("tiled image: %dx%d (%d tiles)\n",(int)x_tiles,(int)y_tiles,(int)x_tiles * (int)y_tiles);
 		int offsets[x_tiles*y_tiles];
 		offsets[0] = 0;
-		printf("tile offset 0: 0\n");
+		printf("  tile offset 0: 0\n");
 		for(int i=1;i<x_tiles*y_tiles;i++){
 			offsets[i] = read_varint(in_bytes, &byte_pointer);
 			printf("  tile offset %d: %d\n",i,offsets[i]);
@@ -431,6 +431,7 @@ int main(int argc, char *argv[]){
 	size_t width = read_varint(in_bytes, &byte_pointer) + 1;
 	size_t height = read_varint(in_bytes, &byte_pointer) + 1;
 	printf("dimensions: %dx%d\n",(int)width,(int)height);
+	printf("compressed size: %d bytes (%.3f%% or raw RGB)\n",(int)in_size,(double)(100*in_size)/(double)(width*height*3));
 	if(bit_depth == 0){
 		if(byte_pointer < in_size){
 			printf("file is too large for a blank image!\n");

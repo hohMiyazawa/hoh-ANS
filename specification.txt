@@ -64,8 +64,10 @@ varints of offsets to all channels from the previous after the first one. (may b
 		
 [prediction]
 	(1bit)
-	1 byte x_tiles
-	1 byte y_tiles
+	1 byte x_tiles-1
+	1 byte y_tiles-1
+	byte number of unique predictors
+	unique combined predictors
 	subchannel prediction tiles
 
 entropy structure:

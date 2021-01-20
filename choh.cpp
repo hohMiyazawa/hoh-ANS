@@ -353,11 +353,16 @@ int layer_encode(
 	int height,
 	int depth,
 	int cruncher_mode,
-	uint8_t* LEMPEL_NUKE
+	uint8_t* LEMPEL_NUKE,
+	uint8_t* compressed
 ){
+	size_t output_index = 0;
 	int possible_size = (depth*size + depth*size % 8)/8;
 
 	size_t compaction_overhead = 0;
+
+//disabled until parser ready
+/*
 	if(cruncher_mode){
 		uint32_t colused[1<<depth];
 		for(int i=0;i<(1<<depth);i++){
@@ -386,6 +391,8 @@ int layer_encode(
 			}
 		}
 	}
+*/
+	compressed[output_index++] = (1<<7)/*use prediction*/ + 0b00000000/*no compaction*/;
 
 	uint32_t prob_bits = 15;
 
@@ -434,7 +441,10 @@ int layer_encode(
 	}
 
 	size_t maximum_size = 10 + (1<<(depth))*2 + (cleaned_pointer*(depth) + 8 - 1)/8;
+
 	uint8_t* dummyrand = new uint8_t[maximum_size];
+	uint8_t* permanent = new uint8_t[maximum_size];
+
 	size_t channel_size_lz = encode_entropy(
 		predict_cleaned,
 		cleaned_pointer,
@@ -445,6 +455,9 @@ int layer_encode(
 
 	if(channel_size_lz < possible_size){
 		possible_size = channel_size_lz;
+		uint8_t* tmp = permanent;
+		permanent = dummyrand;
+		dummyrand = tmp;
 	}
 
 	int total_tiles = 1;
@@ -525,10 +538,6 @@ int layer_encode(
 			}
 			new_cost += tile_cost;
 		}
-		//printf("total entropy 2 %f\n",new_cost/8);
-		for(int i=0;i<total_tiles;i++){
-			//printf("preds %d\n",predictor_list[i]);
-		}
 
 		predict = channelpredict_all(
 			data,
@@ -591,7 +600,42 @@ int layer_encode(
 
 		tile_cost = 4 + (total_tiles)/2;
 
+		compressed[output_index++] = x_tiles-1;
+		compressed[output_index++] = y_tiles-1;
+
+		uint8_t masks_used[14];
+		for(int j=0;j<14;j++){
+			masks_used[j] = 0;
+		}
+		for(int i=0;i<total_tiles;i++){
+			for(int j=0;j<14;j++){
+				if(predictor_list[i] == masks[j]){
+					masks_used[j] = 1;
+					break;
+				}
+			}
+		}
+
+		uint8_t used_predictors = 0;
+		for(int j=0;j<14;j++){
+			used_predictors += masks_used[j];
+		}
+		compressed[output_index++] = used_predictors;
+		for(int j=0;j<14;j++){
+			if(masks_used[j]){
+				compressed[output_index++] = (uint8_t)(masks[j]>>8);
+				compressed[output_index++] = (uint8_t)(masks[j] % 256);
+			}
+		}
+		/*print map here*/
 		delete[] predictor_list;
+	}
+	else{
+		compressed[output_index++] = 0;//x tiles-1
+		compressed[output_index++] = 0;//y tiles-1
+		compressed[output_index++] = 1;//number of predictor combinations
+		compressed[output_index++] = 0b00000000;
+		compressed[output_index++] = 0b00010000;
 	}
 	if(cruncher_mode){
 		size_t temp_size;
@@ -629,6 +673,9 @@ int layer_encode(
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
+					uint8_t* tmp = permanent;
+					permanent = dummyrand;
+					dummyrand = tmp;
 				}
 			}
 		}
@@ -646,12 +693,16 @@ int layer_encode(
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
+					uint8_t* tmp = permanent;
+					permanent = dummyrand;
+					dummyrand = tmp;
 				}
 			}
 		}
 	}
 
 	delete[] dummyrand;
+	delete[] permanent;
 	delete[] predict;
 	delete[] predict_cleaned;
 
@@ -727,6 +778,7 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 	uint32_t* pred_buf_1;
 	uint32_t* pred_end_1;
 	uint32_t* pred_rans_begin_1;
+	uint8_t* compressed_dummy = new uint8_t[in_size + 256];
 	int encoded_size = layer_encode(
 		INDEXED,
 		in_size/3,
@@ -734,9 +786,11 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 		height,
 		8,
 		cruncher_mode,
-		LEMPEL_NUKE
+		LEMPEL_NUKE,
+		compressed_dummy
 	) + palette_index*3 + 1;
 	delete[] INDEXED;
+	delete[] compressed_dummy;
 	return encoded_size;
 }
 
@@ -830,6 +884,7 @@ size_t encode_tile(
 		else{
 			//TODO 8bit for less memory usage
 			uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
+			uint8_t* compressed_dummy = new uint8_t[in_size + 256];
 			best_size = layer_encode(
 				GREY,
 				in_size/3,
@@ -837,9 +892,11 @@ size_t encode_tile(
 				height,
 				8,
 				cruncher_mode,
-				LEMPEL_NUKE
+				LEMPEL_NUKE,
+				compressed_dummy
 			) + lz_external_overhead;
 			internal_colour_mode = 1;//greyscale
+			delete[] compressed_dummy;
 			delete[] GREY;
 		}
 	}
@@ -855,6 +912,8 @@ size_t encode_tile(
 		uint16_t* BLUE_G = new uint16_t[split_size];
 		subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
+		uint8_t* compressed_dummy = new uint8_t[in_size + 256];
+
 		int green_size = layer_encode(
 			GREEN,
 			split_size,
@@ -862,7 +921,8 @@ size_t encode_tile(
 			height,
 			8,
 			cruncher_mode,
-			LEMPEL_NUKE
+			LEMPEL_NUKE,
+			compressed_dummy
 		);
 		subtract_green_size += green_size;
 
@@ -873,7 +933,8 @@ size_t encode_tile(
 			height,
 			9,
 			cruncher_mode,
-			LEMPEL_NUKE
+			LEMPEL_NUKE,
+			compressed_dummy
 		);
 
 		subtract_green_size += layer_encode(
@@ -883,7 +944,8 @@ size_t encode_tile(
 			height,
 			9,
 			cruncher_mode,
-			LEMPEL_NUKE
+			LEMPEL_NUKE,
+			compressed_dummy
 		);
 		delete[] GREEN;
 		delete[] RED_G;
@@ -900,7 +962,8 @@ size_t encode_tile(
 					height,
 					8,
 					cruncher_mode,
-					LEMPEL_NUKE
+					LEMPEL_NUKE,
+					compressed_dummy
 				);
 				uint16_t* BLUE = channel_picker(in_bytes, in_size, 3, 2);
 				int blue_size = layer_encode(
@@ -910,7 +973,8 @@ size_t encode_tile(
 					height,
 					8,
 					cruncher_mode,
-					LEMPEL_NUKE
+					LEMPEL_NUKE,
+					compressed_dummy
 				);
 				rgb_size = red_size + green_size + blue_size;
 			}
@@ -922,7 +986,8 @@ size_t encode_tile(
 					height,
 					8,
 					cruncher_mode - 1,
-					LEMPEL_NUKE
+					LEMPEL_NUKE,
+					compressed_dummy
 				);
 				int blue_size = layer_encode(
 					BLUE,
@@ -931,13 +996,15 @@ size_t encode_tile(
 					height,
 					8,
 					cruncher_mode - 1,
-					LEMPEL_NUKE
+					LEMPEL_NUKE,
+					compressed_dummy
 				);
 				rgb_size = red_size + green_size + blue_size;
 			}
 			delete[] RED;
 			delete[] BLUE;
 		}
+		delete[] compressed_dummy;
 
 		best_size = subtract_green_size + lz_external_overhead;
 		internal_colour_mode = 128;//sub_green
