@@ -346,7 +346,7 @@ uint16_t* channelpredict_all(
 	return out_buf;
 }
 
-int layer_encode(
+size_t layer_encode(
 	uint16_t* data,
 	size_t size,
 	int width,
@@ -470,21 +470,14 @@ int layer_encode(
 		for(int i=0;i<size;i++){
 			freqs[predict[i]]++;
 		}
-		/*for(int i=0;i < (1<<(depth));i++){
-			printf("f %d\n",freqs[i]);
-		}*/
 		double entropy[1<<(depth)];
 		for(int i=0;i < (1<<(depth));i++){
 			entropy[i] = -std::log2((double)freqs[i]/(double)size);
 		}
-		/*for(int i=0;i < (1<<(depth));i++){
-			printf("f %f\n",entropy[i]);
-		}*/
 		double total_entropy = 0;
 		for(int i=0;i < (1<<(depth));i++){
 			total_entropy += entropy[i] * (freqs[i] - 1);
 		}
-		//printf("total entropy 1 %f\n",total_entropy/8);
 
 		int grid_size = 40;
 
@@ -492,6 +485,7 @@ int layer_encode(
 		int y_tiles = (height + grid_size - 1)/grid_size;
 		total_tiles = x_tiles*y_tiles;
 		uint16_t* predictor_list = new uint16_t[total_tiles];
+		uint8_t* predictor_index_list = new uint8_t[total_tiles];
 		double new_cost = 0;
 
 		uint16_t masks[14] = {
@@ -534,6 +528,7 @@ int layer_encode(
 				if(current_cost < tile_cost){
 					tile_cost = current_cost;
 					predictor_list[i] = masks[pred];
+					predictor_index_list[i] = pred;
 				}
 			}
 			new_cost += tile_cost;
@@ -590,12 +585,14 @@ int layer_encode(
 					if(current_cost < tile_cost){
 						tile_cost = current_cost;
 						predictor_list[i] = masks[pred];
+						predictor_index_list[i] = pred;
 					}
 				}
 				new_cost += tile_cost;
 			}
 			//printf("total entropy 4 %f\n",new_cost/8);
 		}
+		delete[] predictor_list;
 		//printf("tiles %d\n",total_tiles);
 
 		tile_cost = 4 + (total_tiles)/2;
@@ -608,12 +605,7 @@ int layer_encode(
 			masks_used[j] = 0;
 		}
 		for(int i=0;i<total_tiles;i++){
-			for(int j=0;j<14;j++){
-				if(predictor_list[i] == masks[j]){
-					masks_used[j] = 1;
-					break;
-				}
-			}
+			masks_used[predictor_list[i]] = 1;
 		}
 
 		uint8_t used_predictors = 0;
@@ -628,12 +620,11 @@ int layer_encode(
 			}
 		}
 		/*print map here*/
-		delete[] predictor_list;
+		delete[] predictor_index_list;
 	}
 	else{
 		compressed[output_index++] = 0;//x tiles-1
 		compressed[output_index++] = 0;//y tiles-1
-		compressed[output_index++] = 1;//number of predictor combinations
 		compressed[output_index++] = 0b00000000;
 		compressed[output_index++] = 0b00010000;
 	}
@@ -741,7 +732,15 @@ int count_colours(uint8_t* in_bytes, size_t in_size){
 	return palette_index;
 }
 
-int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int cruncher_mode, uint8_t* LEMPEL_NUKE){
+int palette_encode(
+	uint8_t* in_bytes,
+	size_t in_size,
+	int width,
+	int height,
+	int cruncher_mode,
+	uint8_t* LEMPEL_NUKE,
+	uint8_t* compressed
+){
 	uint8_t red[256];
 	uint8_t green[256];
 	uint8_t blue[256];
@@ -778,7 +777,6 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 	uint32_t* pred_buf_1;
 	uint32_t* pred_end_1;
 	uint32_t* pred_rans_begin_1;
-	uint8_t* compressed_dummy = new uint8_t[in_size + 256];
 	int encoded_size = layer_encode(
 		INDEXED,
 		in_size/3,
@@ -787,10 +785,9 @@ int palette_encode(uint8_t* in_bytes, size_t in_size, int width, int height,int 
 		8,
 		cruncher_mode,
 		LEMPEL_NUKE,
-		compressed_dummy
+		compressed
 	) + palette_index*3 + 1;
 	delete[] INDEXED;
-	delete[] compressed_dummy;
 	return encoded_size;
 }
 
@@ -866,6 +863,15 @@ size_t encode_tile(
 	int best_size;
 	int internal_colour_mode = 2;//rgb default
 	uint8_t channel_number = 3;
+
+	size_t channel_size1 = -1;
+	size_t channel_size2 = -1;
+	size_t channel_size3 = -1;
+
+	uint8_t* channel_compressed1 = new uint8_t[in_size + 256];
+	uint8_t* channel_compressed2;
+	uint8_t* channel_compressed3;
+
 	if(grey_test(in_bytes, in_size)){
 		channel_number = 1;
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
@@ -884,7 +890,6 @@ size_t encode_tile(
 		else{
 			//TODO 8bit for less memory usage
 			uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
-			uint8_t* compressed_dummy = new uint8_t[in_size + 256];
 			best_size = layer_encode(
 				GREY,
 				in_size/3,
@@ -893,10 +898,9 @@ size_t encode_tile(
 				8,
 				cruncher_mode,
 				LEMPEL_NUKE,
-				compressed_dummy
+				channel_compressed1
 			) + lz_external_overhead;
 			internal_colour_mode = 1;//greyscale
-			delete[] compressed_dummy;
 			delete[] GREY;
 		}
 	}
@@ -904,7 +908,6 @@ size_t encode_tile(
 
 		int rgb_size = -1;
 		int subtract_green_size = 0;
-		int palette_size = palette_encode(in_bytes, in_size, width, height, cruncher_mode, LEMPEL_NUKE);
 
 		size_t split_size = in_size/3;
 		uint16_t* GREEN  = new uint16_t[split_size];
@@ -912,9 +915,7 @@ size_t encode_tile(
 		uint16_t* BLUE_G = new uint16_t[split_size];
 		subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
-		uint8_t* compressed_dummy = new uint8_t[in_size + 256];
-
-		int green_size = layer_encode(
+		size_t channel_size1 = layer_encode(
 			GREEN,
 			split_size,
 			width,
@@ -922,11 +923,13 @@ size_t encode_tile(
 			8,
 			cruncher_mode,
 			LEMPEL_NUKE,
-			compressed_dummy
+			channel_compressed1
 		);
-		subtract_green_size += green_size;
 
-		subtract_green_size += layer_encode(
+		channel_compressed2 = new uint8_t[in_size + 256];
+		channel_compressed3 = new uint8_t[in_size + 256];
+
+		size_t rchannel_size2 = layer_encode(
 			RED_G,
 			split_size,
 			width,
@@ -934,10 +937,10 @@ size_t encode_tile(
 			9,
 			cruncher_mode,
 			LEMPEL_NUKE,
-			compressed_dummy
+			channel_compressed2
 		);
 
-		subtract_green_size += layer_encode(
+		size_t channel_size3 = layer_encode(
 			BLUE_G,
 			split_size,
 			width,
@@ -945,79 +948,79 @@ size_t encode_tile(
 			9,
 			cruncher_mode,
 			LEMPEL_NUKE,
-			compressed_dummy
+			channel_compressed3
 		);
 		delete[] GREEN;
 		delete[] RED_G;
 		delete[] BLUE_G;
+		subtract_green_size += channel_size1 + channel_size2 + channel_size3;
 
+		size_t red_channel_size;
+		size_t blue_channel_size;
+		uint8_t* alt_comp2;
+		uint8_t* alt_comp3;
 		if(cruncher_mode > 2){
+			alt_comp2 = new uint8_t[in_size + 256];
+			alt_comp3 = new uint8_t[in_size + 256];
 			uint16_t* RED = channel_picker(in_bytes, in_size, 3, 0);
-			uint16_t* BLUE = channel_picker(in_bytes, in_size, 3, 2);
-			if(cruncher_mode == 4){
-				int red_size = layer_encode(
-					RED,
-					split_size,
-					width,
-					height,
-					8,
-					cruncher_mode,
-					LEMPEL_NUKE,
-					compressed_dummy
-				);
-				uint16_t* BLUE = channel_picker(in_bytes, in_size, 3, 2);
-				int blue_size = layer_encode(
-					BLUE,
-					split_size,
-					width,
-					height,
-					8,
-					cruncher_mode,
-					LEMPEL_NUKE,
-					compressed_dummy
-				);
-				rgb_size = red_size + green_size + blue_size;
-			}
-			else{
-				int red_size = layer_encode(
-					RED,
-					split_size,
-					width,
-					height,
-					8,
-					cruncher_mode - 1,
-					LEMPEL_NUKE,
-					compressed_dummy
-				);
-				int blue_size = layer_encode(
-					BLUE,
-					split_size,
-					width,
-					height,
-					8,
-					cruncher_mode - 1,
-					LEMPEL_NUKE,
-					compressed_dummy
-				);
-				rgb_size = red_size + green_size + blue_size;
-			}
+			red_channel_size = layer_encode(
+				RED,
+				split_size,
+				width,
+				height,
+				8,
+				cruncher_mode,
+				LEMPEL_NUKE,
+				alt_comp2
+			);
 			delete[] RED;
+			uint16_t* BLUE = channel_picker(in_bytes, in_size, 3, 2);
+			blue_channel_size = layer_encode(
+				BLUE,
+				split_size,
+				width,
+				height,
+				8,
+				cruncher_mode,
+				LEMPEL_NUKE,
+				alt_comp3
+			);
+			rgb_size = red_channel_size + channel_size1 + blue_channel_size;
 			delete[] BLUE;
 		}
-		delete[] compressed_dummy;
 
 		best_size = subtract_green_size + lz_external_overhead;
 		internal_colour_mode = 128;//sub_green
+
+		uint8_t* channel_compressed_indexed = new uint8_t[in_size + 256];
+		int palette_size = palette_encode(in_bytes, in_size, width, height, cruncher_mode, LEMPEL_NUKE, channel_compressed_indexed);
+
 		if(palette_size != -1 && palette_size + lz_external_overhead < best_size){
 			best_size = palette_size + lz_external_overhead;
 			internal_colour_mode = 127;//indexed
 			channel_number = 1;
+			uint8_t* tmp = channel_compressed1;
+			channel_compressed1 = channel_compressed_indexed;
+			channel_compressed_indexed = tmp;
 		}
 		if(rgb_size != -1 && rgb_size + lz_external_overhead < best_size){
 			best_size = rgb_size + lz_external_overhead;
 			internal_colour_mode = 2;//rgb
 			channel_number = 3;
+			channel_size2 = red_channel_size;
+			channel_size3 = blue_channel_size;
+
+			uint8_t* tmp = channel_compressed2;
+			channel_compressed2 = alt_comp2;
+			alt_comp2 = tmp;
+			tmp = channel_compressed3;
+			channel_compressed3 = alt_comp3;
+			alt_comp3 = tmp;
+
+			delete[] alt_comp2;
+			delete[] alt_comp3;
 		}
+		delete[] channel_compressed_indexed;
 	}
 	out_buf[out_start++] = internal_colour_mode;
 	uint8_t use_lempel = 1;
@@ -1030,17 +1033,38 @@ size_t encode_tile(
 	out_buf[out_start++] = use_lempel + (l_z_backref<<1) + (l_z_bulk<<2) + (l_z_rans<<3);
 
 	//never reorder
-	if(channel_number == 3){
-		out_buf[out_start++] = 36;
+	if(channel_number == 1){
 	}
 	else if(channel_number == 2){
-		out_buf[out_start++] = 4;
+		out_buf[out_start++] = 0b00000100;//xx xx 1 0
+		write_varint(out_buf, &out_start, channel_size1);
+		for(size_t i=0;i<channel_size1;i++){
+			out_buf[out_start++] = channel_compressed1[i];
+		}
+		delete[] channel_compressed2;
+	}
+	else if(channel_number == 3){
+		out_buf[out_start++] = 0b00100100;//xx 2 1 0
+		write_varint(out_buf, &out_start, channel_size1);
+		write_varint(out_buf, &out_start, channel_size2);
+
+
+		delete[] channel_compressed2;
+		delete[] channel_compressed3;
+	}
+	else if(channel_number == 4){
+		printf("unimplemented channel number! %d\n",(int)channel_number);
+		out_buf[out_start++] = 0b11100100;//3 2 1 0
+		write_varint(out_buf, &out_start, channel_size1);
+		write_varint(out_buf, &out_start, channel_size2);
+		write_varint(out_buf, &out_start, channel_size3);
 	}
 	else{
+		printf("unimplemented channel number! %d\n",(int)channel_number);
 		out_buf[out_start++] = 0;
 	}
-	
 
+	delete[] channel_compressed1;
 	delete[] LEMPEL;
 	delete[] LEMPEL_NUKE;
 
@@ -1054,7 +1078,7 @@ void print_usage(){
 	printf("The input file must consist of raw 8bit RGB bytes\n");
 	printf("You can make such a file with imagemagick:\n");
 	printf("convert input.png -depth 8 rgb:infile.rgb\n\n");
-	printf("Output will at present not be written because file IO is tedious\n");
+	printf("Output will at present incomplete because file IO is tedious\n");
 }
 
 int main(int argc, char *argv[]){

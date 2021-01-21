@@ -86,8 +86,27 @@ uint8_t* decode_channel(
 	}
 	else if(compaction_mode == 7){
 	}
+
+
 	if(prediction_mode){
 		printf("unimplemented prediction mode!\n");
+
+		size_t x_tiles = in_bytes[byte_pointer++] + 1;
+		size_t y_tiles =  + 1;
+		if(x_tiles == 1 && y_tiles == 1){
+			uint16_t predictor_bits = in_bytes[byte_pointer++];
+			uint16_t lower_bits = in_bytes[byte_pointer++];
+			predictor_bits = (predictor_bits<<8) + lower_bits;
+		}
+		else{
+			uint8_t combinations_used = in_bytes[byte_pointer++];
+			uint16_t combinations[combinations_used];
+			for(int i=0;i<combinations_used;i++){
+				uint16_t upper_bits = in_bytes[byte_pointer++];
+				uint16_t lower_bits = in_bytes[byte_pointer++];
+				combinations[i] = (upper_bits<<8) + lower_bits;
+			}
+		}
 	}
 	else{
 		size_t symbol_size;
