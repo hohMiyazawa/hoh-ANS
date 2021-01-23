@@ -18,7 +18,7 @@ size_t layer_encode(
 	uint8_t* compressed
 ){
 	size_t output_index = 0;
-	int possible_size = (depth*size + depth*size % 8)/8;
+	size_t possible_size = (depth*size + depth*size % 8 + 1024)/8;
 
 	size_t compaction_overhead = 0;
 
@@ -123,7 +123,16 @@ size_t layer_encode(
 
 	int total_tiles = 1;
 	int tile_cost = 2;
-	if(cruncher_mode){
+
+	int grid_size = 40;//heuristic
+
+	if(
+		cruncher_mode
+		&& (
+			(width + grid_size - 1)/grid_size > 1
+			|| (height + grid_size - 1)/grid_size > 1
+		)
+	){
 		int freqs[1<<(depth)];
 		for(int i=0;i < (1<<(depth));i++){
 			freqs[i] = 1;//to have no zero values, so the frequency table is usable for other predictors
@@ -139,8 +148,6 @@ size_t layer_encode(
 		for(int i=0;i < (1<<(depth));i++){
 			total_entropy += entropy[i] * (freqs[i] - 1);
 		}
-
-		int grid_size = 40;
 
 		int x_tiles = (width + grid_size - 1)/grid_size;
 		int y_tiles = (height + grid_size - 1)/grid_size;
@@ -280,7 +287,25 @@ size_t layer_encode(
 				compressed[output_index++] = (uint8_t)(masks[j] % 256);
 			}
 		}
-		/*print map here*/
+		uint8_t mapper[14];
+		uint8_t counter = 0;
+		for(int j=0;j<14;j++){
+			if(masks_used[j]){
+				mapper[j] = counter++;
+			}
+		}
+		for(size_t i=0;i<total_tiles;i++){
+			predictor_index_list[i] = mapper[predictor_index_list[i]];
+		}
+		size_t predictor_map_size = encode_entropy(
+			predictor_index_list,
+			0,
+			14,
+			compressed + output_index,
+			8
+		);
+		printf("predictor map overhead: %d\n",(int)predictor_map_size);
+		output_index += predictor_map_size;
 		delete[] predictor_index_list;
 	}
 	else{
@@ -352,14 +377,15 @@ size_t layer_encode(
 			}
 		}
 	}
-
 	delete[] dummyrand;
-	delete[] permanent;
 	delete[] predict;
 	delete[] predict_cleaned;
+	for(size_t i=0;i<possible_size;i++){
+		compressed[output_index++] = permanent[i];
+	}
+	delete[] permanent;
 
-	//printf("layer cost %d\n",(int)possible_size);
-	return possible_size + 1 + tile_cost + compaction_overhead;
+	return output_index;
 }
 
 #endif // LAYER_ENCODE_HEADER
