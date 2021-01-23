@@ -7,10 +7,9 @@ uint8_t* decode_layer(
 	uint8_t* in_bytes,
 	size_t in_size,
 	size_t byte_pointer,
-	uint8_t pixel_format,
-	uint8_t bit_depth,
 	size_t width,
-	size_t height
+	size_t height,
+	uint8_t bit_depth
 ){
 	uint8_t channel_transforms = in_bytes[byte_pointer++];
 	uint8_t compaction_mode = (channel_transforms & 0b11100000)>>5;

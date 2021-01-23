@@ -167,10 +167,9 @@ uint8_t* decode_tile(
 			in_bytes,
 			in_size,
 			byte_pointer,
-			pixel_format_internal,
-			bit_depth,
 			width,
-			height
+			height,
+			bit_depth
 		);
 		if(pixel_format == pixel_format_internal){
 			delete[] decoded;
@@ -226,28 +225,25 @@ uint8_t* decode_tile(
 			in_bytes,
 			in_size,
 			byte_pointer,
-			pixel_format_internal,
-			bit_depth,
 			width,
-			height
+			height,
+			bit_depth
 		);
 		uint8_t* decoded_channel2 = decode_layer(
 			in_bytes,
 			in_size,
 			byte_pointer + offset1,
-			pixel_format_internal,
-			bit_depth,
 			width,
-			height
+			height,
+			bit_depth
 		);
 		uint8_t* decoded_channel3 = decode_layer(
 			in_bytes,
 			in_size,
 			byte_pointer + offset1 + offset2,
-			pixel_format_internal,
-			bit_depth,
 			width,
-			height
+			height,
+			bit_depth
 		);
 		if(pixel_format == 2){
 			//default order GRB, not honoring channel reordering at the moment

@@ -8,4 +8,5 @@ if cmp -s example.rgb tmp_decompressed ; then
 else
 	echo "\033[0;31mRGB roundtrip: FAILED\033[0m"
 	# keep tmp files for diagnosis
+	exit 1
 fi
