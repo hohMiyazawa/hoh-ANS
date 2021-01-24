@@ -128,7 +128,6 @@ size_t encode_tile(
 	for(int i=0;i<in_size/3;i++){
 		LEMPEL_NUKE[i] = 0;
 	}
-	size_t lz_symbol_size;
 
 	int seek_distance = 6;
 	if(cruncher_mode == 1){
@@ -161,13 +160,12 @@ size_t encode_tile(
 		}
 	}
 
-	int lz_external_overhead = find_lz_rgb(
+	size_t lz_external_overhead = find_lz_rgb(
 		in_bytes,
 		in_size,
 		width,
 		height,
 		LEMPEL,
-		&lz_symbol_size,
 		LEMPEL_NUKE,
 		seek_distance,
 		break_even_addition
@@ -177,9 +175,9 @@ size_t encode_tile(
 	int internal_colour_mode = 2;//rgb default
 	uint8_t channel_number = 3;
 
-	size_t channel_size1 = -1;
-	size_t channel_size2 = -1;
-	size_t channel_size3 = -1;
+	size_t channel_size1;
+	size_t channel_size2;
+	size_t channel_size3;
 
 	uint8_t* channel_compressed1 = new uint8_t[in_size + 256];
 	uint8_t* channel_compressed2;
@@ -336,14 +334,10 @@ size_t encode_tile(
 		delete[] channel_compressed_indexed;
 	}
 	out_buf[out_start++] = internal_colour_mode;
-	uint8_t use_lempel = 1;
-	uint8_t l_z_backref = 1;
-	if(cruncher_mode == 0){
-		l_z_backref = 0;
+	for(size_t i=0;i<lz_external_overhead;i++){
+		out_buf[out_start++] = LEMPEL[i];
 	}
-	uint8_t l_z_bulk = 0;//not really true
-	uint8_t l_z_rans = 1;
-	out_buf[out_start++] = use_lempel + (l_z_backref<<1) + (l_z_bulk<<2) + (l_z_rans<<3);
+	delete[] LEMPEL;
 
 	//never reorder
 	if(channel_number == 1){
@@ -354,13 +348,24 @@ size_t encode_tile(
 		for(size_t i=0;i<channel_size1;i++){
 			out_buf[out_start++] = channel_compressed1[i];
 		}
+		for(size_t i=0;i<channel_size2;i++){
+			out_buf[out_start++] = channel_compressed2[i];
+		}
 		delete[] channel_compressed2;
 	}
 	else if(channel_number == 3){
 		out_buf[out_start++] = 0b00100100;//xx 2 1 0
 		write_varint(out_buf, &out_start, channel_size1);
 		write_varint(out_buf, &out_start, channel_size2);
-
+		for(size_t i=0;i<channel_size1;i++){
+			out_buf[out_start++] = channel_compressed1[i];
+		}
+		for(size_t i=0;i<channel_size2;i++){
+			out_buf[out_start++] = channel_compressed2[i];
+		}
+		for(size_t i=0;i<channel_size3;i++){
+			out_buf[out_start++] = channel_compressed3[i];
+		}
 
 		delete[] channel_compressed2;
 		delete[] channel_compressed3;
@@ -378,11 +383,9 @@ size_t encode_tile(
 	}
 
 	delete[] channel_compressed1;
-	delete[] LEMPEL;
 	delete[] LEMPEL_NUKE;
 
-	//printf("marigin %d %d\n",out_max_size,out_start + best_size);
-	return out_start + best_size;
+	return out_start;
 }
 
 void print_usage(){

@@ -3,17 +3,18 @@
 
 #include "entropy_encoding.hpp"
 
-int find_lz_rgb(
+size_t find_lz_rgb(
 	uint8_t* source,
 	size_t size,
 	int width,
 	int height,
 	uint8_t* lz_symbols,
-	size_t* lz_symbol_size,
 	uint8_t* nukemap,
 	int distance,
 	int break_even_bonus
 ){
+	size_t byte_pointer = 0;
+
 	int lz_index = 0;
 	int since_last = 0;
 	int limit_distance = (1<<distance);
@@ -75,20 +76,20 @@ int find_lz_rgb(
 			since_last++;
 			if(since_last == 255){
 				since_last = 0;
-				lz_symbols[lz_index++] = 255;
+				//lz_symbols[lz_index++] = 255;
 				lz_future[lz_future_size++] = 255;
 			}
 		}
 		else{
-			lz_symbols[lz_index++] = since_last;
+			//lz_symbols[lz_index++] = since_last;
 			lz_future[lz_future_size++] = since_last;
 			if(distance > 8){
-				lz_symbols[lz_index++] = (best_back - 1) / 256;
+				//lz_symbols[lz_index++] = (best_back - 1) / 256;
 				lz_backby2[lz_backby2_size++] = (best_back - 1) / 256;
 			}
-			lz_symbols[lz_index++] = (best_back - 1) % 256;
+			//lz_symbols[lz_index++] = (best_back - 1) % 256;
 			lz_backby[lz_backby_size++] = (best_back - 1) % 256;
-			lz_symbols[lz_index++] = (longest - 4);
+			//lz_symbols[lz_index++] = (longest - 4);
 			lz_length[lz_length_size++] = (longest - 4);
 			since_last = 0;
 			for(int offset = 0;offset < longest;offset++){
@@ -97,33 +98,40 @@ int find_lz_rgb(
 			i += (longest - 1)*3;
 		}
 	}
-	*lz_symbol_size = lz_index;
-	uint8_t* dummyrand = new uint8_t[lz_index + 10];
+	//*lz_symbol_size = lz_index;
+
+	lz_symbols[byte_pointer++] = 0b00000011;
 
 	size_t lz_overhead1 = encode_entropy(
 		lz_future,
 		lz_future_size,
 		256,
-		dummyrand,
+		lz_symbols + byte_pointer,
 		10,
 		0//no diagnostic
 	);
+	delete[] lz_future;
+	byte_pointer += lz_overhead1;
 	size_t lz_overhead2 = encode_entropy(
 		lz_length,
 		lz_length_size,
 		256,
-		dummyrand,
+		lz_symbols + byte_pointer,
 		10,
 		0//no diagnostic
 	);
+	delete[] lz_length;
+	byte_pointer += lz_overhead2;
 	size_t lz_overhead3 = encode_entropy(
 		lz_backby,
 		lz_backby_size,
 		256,
-		dummyrand,
+		lz_symbols + byte_pointer,
 		10,
 		0//no diagnostic
 	);
+	delete[] lz_backby;
+	byte_pointer += lz_overhead3;
 	size_t lz_overhead4 = 0;
 
 	if(distance > 8){
@@ -131,34 +139,31 @@ int find_lz_rgb(
 			lz_backby2,
 			lz_backby2_size,
 			256,
-			dummyrand,
+			lz_symbols + byte_pointer,
 			10,
 			0//no diagnostic
 		);
+		byte_pointer += lz_overhead4;
 	}
-	size_t lz_overhead_collected = encode_entropy(
+	delete[] lz_backby2;
+	//don't consider joined channels yet
+	/*size_t lz_overhead_collected = encode_entropy(
 		lz_symbols,
 		*lz_symbol_size,
 		256,
 		dummyrand,
 		10,
 		0//no diagnostic
-	);
-	delete[] dummyrand;
-	delete[] lz_future;
-	delete[] lz_length;
-	delete[] lz_backby;
-	delete[] lz_backby2;
-	int best_size = lz_overhead1 + lz_overhead2 + lz_overhead3 + lz_overhead4;
-	if(lz_overhead_collected < best_size){
+	);*/
+	/*if(lz_overhead_collected < best_size){
 		best_size = lz_overhead_collected;
-	}
-	if(*lz_symbol_size < best_size){
+	}*/
+	/*if(*lz_symbol_size < best_size){
 		best_size = *lz_symbol_size;
-	}
+	}*/
 	//printf("internal lempel %d|%d + %d|%d + %d|%d = %d\n",lz_overhead1,(int)lz_future_size,lz_overhead2,(int)lz_length_size,lz_overhead3,(int)lz_backby_size,lz_overhead1 + lz_overhead2 + lz_overhead3);
 	//printf("external lempel %d\n",best_size);
-	return 1 + best_size;
+	return byte_pointer;
 }
 
 #endif // LZ_HEADER

@@ -43,7 +43,6 @@ header notes:
 	last bit: lempel-ziv yes/no
 	bit2: 0(1 byte backref), 1(2 byte backref)
 	bit3: joined channels 1yes, 0no
-	bit4: rans encoded 1yes, 0no-
 	
 [Lempel-Ziv data]
 channel reordering (only if >1 channels)
