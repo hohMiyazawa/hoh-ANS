@@ -29,7 +29,8 @@ int main(int argc, char *argv[]){
 		in_size,
 		256,
 		output_bytes,
-		12
+		12,
+		1//iagnostic
 	);
 
 	delete[] in_bytes;

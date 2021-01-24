@@ -332,4 +332,4 @@ uint16_t* channelpredict_all(
 	return out_buf;
 }
 
-#endif //PREDICTION LZ_HEADER
+#endif //PREDICTION_HEADER

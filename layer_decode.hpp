@@ -73,7 +73,6 @@ uint8_t* decode_layer(
 
 
 	if(prediction_mode){
-		printf("unimplemented prediction mode!\n");
 
 		size_t x_tiles = in_bytes[byte_pointer++] + 1;
 		size_t y_tiles = in_bytes[byte_pointer++] + 1;
@@ -81,8 +80,10 @@ uint8_t* decode_layer(
 			uint16_t predictor_bits = in_bytes[byte_pointer++];
 			uint16_t lower_bits = in_bytes[byte_pointer++];
 			predictor_bits = (predictor_bits<<8) + lower_bits;
+			printf("    predictor %d\n",(int)predictor_bits);
 		}
 		else{
+			printf("    unimplemented prediction mode!\n");
 			uint8_t combinations_used = in_bytes[byte_pointer++];
 			uint16_t combinations[combinations_used];
 			for(int i=0;i<combinations_used;i++){
@@ -90,7 +91,24 @@ uint8_t* decode_layer(
 				uint16_t lower_bits = in_bytes[byte_pointer++];
 				combinations[i] = (upper_bits<<8) + lower_bits;
 			}
+			//read map here
 		}
+
+		size_t symbol_size;
+		uint16_t* symbols = decode_entropy(
+			in_bytes,
+			in_size,
+			&byte_pointer,
+			&symbol_size,
+			0//no diagnostic
+		);
+		for(size_t i=0;i<symbol_size;i+= width){
+			printf("%d %d %d %d %d\n",(int)symbols[i],(int)symbols[i+1],(int)symbols[i+2],(int)symbols[i+3],(int)symbols[i+4]);
+		}
+
+		//add unpredictor
+
+		delete[] symbols;
 	}
 	else{
 		size_t symbol_size;
@@ -98,11 +116,13 @@ uint8_t* decode_layer(
 			in_bytes,
 			in_size,
 			&byte_pointer,
-			&symbol_size
+			&symbol_size,
+			0//no diagnostic
 		);
 		for(int i=0;i<symbol_size;i++){
 			decoded[i] = (uint8_t)symbols[i];
 		}
+		delete[] symbols;
 	}
 	return decoded;
 }

@@ -10,7 +10,8 @@ size_t encode_entropy(
 	size_t symbol_size,
 	size_t range,
 	uint8_t* output_bytes,
-	uint32_t prob_bits
+	uint32_t prob_bits,
+	uint8_t diagnostics
 ){
 	uint8_t entropy_mode;
 	uint8_t table_storage_mode = 0;
@@ -214,6 +215,18 @@ size_t encode_entropy(
 		write_varint(output_bytes, &entropy_size, range-1);
 		write_varint(output_bytes, &entropy_size, symbol_size);
 		output_bytes[entropy_size++] = 0;
+		uint8_t bits_remaining = 8;
+		uint8_t current_byte;
+		for(size_t i=0;i<symbol_size;i++){
+			stuffer(
+				output_bytes,
+				&entropy_size,
+				&current_byte,
+				&bits_remaining,
+				symbols[i],
+				maximum_bits_per_symbol
+			);
+		}
 	}
 
 //diagnostics
@@ -236,7 +249,8 @@ size_t encode_entropy(
 	size_t symbol_size,
 	size_t range,
 	uint8_t* output_bytes,
-	uint32_t prob_bits
+	uint32_t prob_bits,
+	uint8_t diagnostics
 ){
 	uint16_t symbols2[symbol_size];
 	for(size_t i=0;i<symbol_size;i++){
@@ -247,7 +261,8 @@ size_t encode_entropy(
 		symbol_size,
 		range,
 		output_bytes,
-		prob_bits
+		prob_bits,
+		diagnostics
 	);
 }
 

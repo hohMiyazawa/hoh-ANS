@@ -105,21 +105,24 @@ int find_lz_rgb(
 		lz_future_size,
 		256,
 		dummyrand,
-		10
+		10,
+		0//no diagnostic
 	);
 	size_t lz_overhead2 = encode_entropy(
 		lz_length,
 		lz_length_size,
 		256,
 		dummyrand,
-		10
+		10,
+		0//no diagnostic
 	);
 	size_t lz_overhead3 = encode_entropy(
 		lz_backby,
 		lz_backby_size,
 		256,
 		dummyrand,
-		10
+		10,
+		0//no diagnostic
 	);
 	size_t lz_overhead4 = 0;
 
@@ -129,7 +132,8 @@ int find_lz_rgb(
 			lz_backby2_size,
 			256,
 			dummyrand,
-			10
+			10,
+			0//no diagnostic
 		);
 	}
 	size_t lz_overhead_collected = encode_entropy(
@@ -137,7 +141,8 @@ int find_lz_rgb(
 		*lz_symbol_size,
 		256,
 		dummyrand,
-		10
+		10,
+		0//no diagnostic
 	);
 	delete[] dummyrand;
 	delete[] lz_future;

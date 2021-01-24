@@ -9,7 +9,8 @@ uint16_t* decode_entropy(
 	uint8_t* in_bytes,
 	size_t in_size,
 	size_t* byte_pointer,
-	size_t* symbol_size
+	size_t* symbol_size,
+	uint8_t diagnostics
 ){
 	size_t symbol_range = read_varint(in_bytes, byte_pointer)+1;
 	*symbol_size = read_varint(in_bytes, byte_pointer);
@@ -26,15 +27,15 @@ uint16_t* decode_entropy(
 
 	uint16_t* decoded = new uint16_t[*symbol_size];
 
-//diagnostics
-/*
-	printf("entropy_mode       : %d\n",(int)entropy_mode);
-	printf("prob_bits          : %d\n",(int)prob_bits);
-	printf("table_storage_mode : %d\n",(int)table_storage_mode);
-	printf("range              : %d\n",(int)symbol_range);
-	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
-	printf("symbols            : %d\n",(int)(*symbol_size));
-*/
+	if(diagnostics){
+		printf("entropy_mode       : %d\n",(int)entropy_mode);
+		printf("prob_bits          : %d\n",(int)prob_bits);
+		printf("table_storage_mode : %d\n",(int)table_storage_mode);
+		printf("range              : %d\n",(int)symbol_range);
+		printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+		printf("symbols            : %d\n",(int)(*symbol_size));
+	}
+
 
 	if(entropy_mode){
 		uint32_t freqs[symbol_range];
@@ -154,13 +155,15 @@ uint8_t* decode_entropy_8bit(//make dedicated 8bit version later
 	uint8_t* in_bytes,
 	size_t in_size,
 	size_t* byte_pointer,
-	size_t* symbol_size
+	size_t* symbol_size,
+	uint8_t diagnostics
 ){
 	uint16_t* decoded = decode_entropy(
 		in_bytes,
 		in_size,
 		byte_pointer,
-		symbol_size
+		symbol_size,
+		diagnostics
 	);
 	uint8_t* decoded2 = new uint8_t[*symbol_size];
 	for(size_t i=0;i<(*symbol_size);i++){

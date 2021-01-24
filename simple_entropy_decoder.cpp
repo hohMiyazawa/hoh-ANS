@@ -29,7 +29,8 @@ int main(int argc, char *argv[]){
 		in_bytes,
 		in_size,
 		&byte_pointer,
-		&output_size
+		&output_size,
+		1//diagnostic
 	);
 	delete[] in_bytes;
 	write_file(argv[2],output_bytes,output_size);

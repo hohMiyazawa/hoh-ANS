@@ -5,6 +5,7 @@
 #include <math.h>
 
 #include "entropy_encoding.hpp"
+#include "entropy_decoding.hpp"//remove, only for debugging
 #include "prediction.hpp"
 
 size_t layer_encode(
@@ -53,7 +54,7 @@ size_t layer_encode(
 		}
 	}
 */
-	compressed[output_index++] = (1<<7)/*use prediction*/ + 0b00000000/*no compaction*/;
+	compressed[output_index++] = (1<<4)/*use prediction*/ + 0b00000000/*no compaction*/;
 
 	uint32_t prob_bits = 15;
 
@@ -111,7 +112,8 @@ size_t layer_encode(
 		cleaned_pointer,
 		1<<(depth),
 		dummyrand,
-		prob_bits
+		prob_bits,
+		0//no diagnostic
 	);
 
 	if(channel_size_lz < possible_size){
@@ -302,7 +304,8 @@ size_t layer_encode(
 			0,
 			14,
 			compressed + output_index,
-			8
+			8,
+			0//no diagnostic
 		);
 		printf("predictor map overhead: %d\n",(int)predictor_map_size);
 		output_index += predictor_map_size;
@@ -327,14 +330,16 @@ size_t layer_encode(
 			cleaned_pointer,
 			1<<(depth),
 			dummyrand,
-			16
+			16,
+			0//no diagnostic
 		);
 		size_t temp_size2 = encode_entropy(
 			predict_cleaned,
 			cleaned_pointer,
 			1<<(depth),
 			dummyrand,
-			15
+			15,
+			0//no diagnostic
 		);
 		if(temp_size1 < temp_size2){
 			if(temp_size1 < possible_size){
@@ -346,7 +351,8 @@ size_t layer_encode(
 					cleaned_pointer,
 					1<<(depth),
 					dummyrand,
-					i
+					i,
+					0//no diagnostic
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
@@ -366,7 +372,8 @@ size_t layer_encode(
 					cleaned_pointer,
 					1<<(depth),
 					dummyrand,
-					i
+					i,
+					0//no diagnostic
 				);
 				if(temp_size < possible_size){
 					possible_size = temp_size;
@@ -383,6 +390,16 @@ size_t layer_encode(
 	for(size_t i=0;i<possible_size;i++){
 		compressed[output_index++] = permanent[i];
 	}
+	/*size_t symbol_size_d;
+	size_t byte_pointer = 0;
+	uint16_t* symbols_d = decode_entropy(
+		permanent,
+		possible_size,
+		&byte_pointer,
+		&symbol_size_d,
+		1//diagnostic
+	);
+	delete[] symbols_d;*/
 	delete[] permanent;
 
 	return output_index;
