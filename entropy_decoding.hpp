@@ -12,6 +12,8 @@ uint16_t* decode_entropy(
 	size_t* symbol_size,
 	uint8_t diagnostics
 ){
+	size_t start_value = (*byte_pointer);
+
 	size_t symbol_range = read_varint(in_bytes, byte_pointer)+1;
 	*symbol_size = read_varint(in_bytes, byte_pointer);
 
@@ -84,7 +86,9 @@ uint16_t* decode_entropy(
 					&slag_bits,
 					maximum_bits_per_symbol
 				);
-				//printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
+				if(diagnostics || 1){
+					printf("  clamps_D: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
+				}
 			}
 			for(int i=0;i<symbol_range;i++){
 				uint8_t symbol_bits = 0;
@@ -118,10 +122,13 @@ uint16_t* decode_entropy(
 		else{
 			printf("unknown frequency table storage mode!\n");
 		}
+		if(diagnostics){
+			printf("entropy_size %d\n",(int)((*byte_pointer) - start_value));
+		}
 		Rans64DecSymbol dsyms[symbol_range];
 
 		size_t data_size = read_varint(in_bytes, byte_pointer);
-		//printf("---rANS size: %d\n",(int)data_size);
+		printf("---rANS size: %d\n",(int)data_size);
 		for(int i=0; i < symbol_range; i++) {
 			//printf("        dsyms %d %d\n",(int)cum_freqs[i], (int)freqs[i]);
 			Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);

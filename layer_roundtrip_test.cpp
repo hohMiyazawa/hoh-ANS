@@ -13,6 +13,7 @@ int main(int argc, char *argv[]){
 
 
 //ENCODE
+	printf("encoding...\n");
 
 	uint16_t* buffer = new uint16_t[20];
 	for(int i=0;i<20;i++){
@@ -40,6 +41,7 @@ int main(int argc, char *argv[]){
 	delete[] LEMPEL_NUKE;
 
 //DECODE
+	printf("decoding...\n");
 
 	uint16_t* LEMPEL_BACKREF = new uint16_t[20];
 	for(int i=0;i<20;i++){
@@ -61,6 +63,9 @@ int main(int argc, char *argv[]){
 	for(int i=0;i<20;i++){
 		if(test_image[i] != decompressed[i]){
 			printf("\033[0;31mLayer roundtrip: FAILED\033[0m\n");
+			for(int i=0;i<20;i+=5){
+				printf("%d %d %d %d %d\n",(int)decompressed[i],(int)decompressed[i+1],(int)decompressed[i+2],(int)decompressed[i+3],(int)decompressed[i+4]);
+			}
 			delete[] decompressed;
 			return 1;
 		}

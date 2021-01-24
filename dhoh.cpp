@@ -11,6 +11,7 @@
 #include "bitimage.hpp"
 #include "entropy_decoding.hpp"
 #include "layer_decode.hpp"
+#include "un_lz.hpp"
 
 void print_usage(){
 	printf("usage: dhoh infile.hoh outfile.rgb\n");
@@ -69,11 +70,13 @@ uint8_t* decode_tile(
 				new_width,
 				new_height
 			);
+/*
 			for(int y=0;y<new_height;y++){
 				for(int x=0;x<new_width;x++){
 					decoded[(y + y_offset) * width + x + x_offset] = decoded_tile_data[y * new_width + x];
 				}
 			}
+*/
 			delete[] decoded_tile_data;
 		}
 		return decoded;
@@ -131,40 +134,15 @@ uint8_t* decode_tile(
 	else{
 		printf("  unknown pixel format %d!\n",(int)pixel_format_internal);
 	}
-	uint8_t lempel_ziv_mode = in_bytes[byte_pointer++];
-	uint8_t has_lempel_ziv   = (lempel_ziv_mode & 0b00000001);
-	uint8_t backref_size     = (lempel_ziv_mode & 0b00000010)>>1;
-	uint8_t bundled_channels = (lempel_ziv_mode & 0b00000100)>>2;
-	uint8_t lempel_ziv_rans  = (lempel_ziv_mode & 0b00001000)>>3;
 	
-	uint16_t* LEMPEL_BACKREF = new uint16_t[width*height];
-	if(has_lempel_ziv == 0){
-		printf("  no Lempel-Ziv transform\n");
-		for(size_t i = 0;i<width*height;i++){
-			LEMPEL_BACKREF[i] = 0;
-		}
-	}
-	else{
-		printf("  Lempel-Ziv transform\n");
-		if(backref_size){
-			printf("    backref: 16bit\n");
-		}
-		else{
-			printf("    backref: 8bit\n");
-		}
-		if(bundled_channels){
-			printf("    bulk: yes\n");
-		}
-		else{
-			printf("    bulk: no\n");
-		}
-		if(lempel_ziv_rans){
-			printf("    rANS: yes\n");
-		}
-		else{
-			printf("    rANS: no\n");
-		}
-	}
+	uint16_t* LEMPEL_BACKREF = un_lz(
+		in_bytes,
+		in_size,
+		&byte_pointer,
+		width,
+		height
+	);
+/*
 
 	if(channel_number_internal == 1){
 		//no need for additional channel information
@@ -266,6 +244,7 @@ uint8_t* decode_tile(
 	}
 	else if(channel_number_internal == 4){
 	}
+*/
 	delete[] LEMPEL_BACKREF;
 	return decoded;
 }

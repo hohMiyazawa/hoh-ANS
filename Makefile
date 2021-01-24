@@ -5,7 +5,7 @@ all: choh dhoh simple_entropy_encoder simple_entropy_decoder tests
 choh: choh.cpp platform.hpp rans64.hpp channel.hpp file_io.hpp lz.hpp bitimage.hpp entropy_encoding.hpp varint.hpp stattools.hpp layer_encode.hpp prediction.hpp predictor_operations.hpp
 	g++ -o $@ $< -O3 $(LIBS)
 
-dhoh: dhoh.cpp platform.hpp rans64.hpp channel.hpp file_io.hpp entropy_decoding.hpp varint.hpp stattools.hpp layer_decode.hpp unprediction.hpp predictor_operations.hpp
+dhoh: dhoh.cpp platform.hpp rans64.hpp channel.hpp file_io.hpp entropy_decoding.hpp varint.hpp stattools.hpp layer_decode.hpp unprediction.hpp predictor_operations.hpp un_lz.hpp
 	g++ -o $@ $< -O3 $(LIBS)
 
 simple_entropy_encoder: simple_entropy_encoder.cpp file_io.hpp rans64.hpp entropy_encoding.hpp varint.hpp stattools.hpp

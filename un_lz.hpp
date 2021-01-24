@@ -19,50 +19,73 @@ uint16_t* un_lz(
 		for(size_t i=0;i<width*height;i++){
 			LEMPEL_BACKREF[i] = 0;
 		}
+		printf("no un_lz to do\n");
 		return LEMPEL_BACKREF;
 	}
 	if(backref_size == 0){//1byte backrefs, not implemented yet
+		printf("unimplemented un_lz\n");
 		if(joined){
 		}
 		else{
 		}
 	}
 	else{
+		printf("standard un_lz\n");
 		if(joined){//not implemented
 		}
 		else{
-			size_t symbol1_size;
-			uint8_t* entropy1 = decode_entropy_8bit(
+			printf("pointer %d \n",(int)(*byte_pointer));
+
+			size_t lz_future_size;
+			uint8_t* lz_future = decode_entropy_8bit(
 				in_bytes,
 				in_size,
 				byte_pointer,
-				&symbol1_size,
+				&lz_future_size,
 				1
 			);
-			size_t symbol2_size;
-			uint8_t* entropy2 = decode_entropy_8bit(
+			printf("%d \n",(int)lz_future_size);
+
+			printf("pointer %d \n",(int)(*byte_pointer));
+
+			size_t lz_length_size;
+			uint8_t* lz_length = decode_entropy_8bit(
 				in_bytes,
 				in_size,
 				byte_pointer,
-				&symbol2_size,
+				&lz_length_size,
 				1
 			);
-			size_t symbol3_size;
-			uint8_t* entropy3 = decode_entropy_8bit(
+			printf("%d \n",(int)lz_length_size);
+
+			printf("pointer %d \n",(int)(*byte_pointer));
+
+			size_t lz_backby_size;
+			uint8_t* lz_backby = decode_entropy_8bit(
 				in_bytes,
 				in_size,
 				byte_pointer,
-				&symbol3_size,
+				&lz_backby_size,
 				1
 			);
-			size_t symbol4_size;
-			uint8_t* entropy4 = decode_entropy_8bit(
+			printf("%d \n",(int)lz_backby_size);
+
+			printf("pointer %d \n",(int)(*byte_pointer));
+
+			size_t lz_backby2_size;
+			uint8_t* lz_backby2 = decode_entropy_8bit(
 				in_bytes,
 				in_size,
 				byte_pointer,
-				&symbol4_size,
+				&lz_backby2_size,
 				1
 			);
+			printf("%d\n",(int)lz_backby2_size);
+
+			printf("pointer %d \n",(int)(*byte_pointer));
+
+			for(size_t i=0;i<width*height;i++){
+			}
 		}
 	}
 	return LEMPEL_BACKREF;

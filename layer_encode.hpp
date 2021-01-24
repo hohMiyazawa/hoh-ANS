@@ -102,7 +102,7 @@ size_t layer_encode(
 		}
 	}
 
-	size_t maximum_size = 10 + (1<<(depth))*2 + (cleaned_pointer*(depth) + 8 - 1)/8;
+	size_t maximum_size = 1024 + (1<<(depth))*2 + (cleaned_pointer*(depth) + 8 - 1)/8;
 
 	uint8_t* dummyrand = new uint8_t[maximum_size];
 	uint8_t* permanent = new uint8_t[maximum_size];

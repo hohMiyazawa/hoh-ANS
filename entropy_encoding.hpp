@@ -48,24 +48,30 @@ size_t encode_entropy(
 	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
 	expected_clamped_size += prob_bits*2;
 
-	uint16_t lower_clamps[((prob_bits - 1)/4 + 2)];
-	uint16_t upper_clamps[((prob_bits - 1)/4 + 2)];
+	uint8_t clamp_number = ((prob_bits - 1)/4 + 2);
+
+	uint16_t lower_clamps[clamp_number];
+	uint16_t upper_clamps[clamp_number];
 
 	int size_bits = 0;
 	int climb = 0;
+	size_t lower_clamp_index = 0;
 	for(;climb<range;climb++){
 		while(freqs[climb] >= (1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
 				lower_clamps[0] = climb;
+				lower_clamp_index = 1;
 			}
 			else if(size_bits == 1){
 				size_bits = 4;
 				lower_clamps[1] = climb;
+				lower_clamp_index = 2;
 			}
 			else{
 				lower_clamps[size_bits/4 + 1] = climb;
 				size_bits += 4;
+				lower_clamp_index++;
 			}
 		}
 		if(size_bits >= prob_bits){
@@ -75,21 +81,29 @@ size_t encode_entropy(
 		}
 		expected_clamped_size += size_bits;
 	}
+	while(lower_clamp_index < clamp_number){
+		lower_clamps[lower_clamp_index++] = range - 1;
+	}
 	size_bits = 0;
 	int climb2 = range - 1;
+	size_t upper_clamp_index = 0;
 	for(;climb2 > climb;climb2--){
+		//printf("  climb2: %d\n",(int)climb2);
 		while(freqs[climb2] >= (1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
 				upper_clamps[0] = climb2;
+				upper_clamp_index = 1;
 			}
 			else if(size_bits == 1){
 				size_bits = 4;
 				upper_clamps[1] = climb2;
+				upper_clamp_index = 2;
 			}
 			else{
 				upper_clamps[size_bits/4 + 1] = climb2;
 				size_bits += 4;
+				upper_clamp_index++;
 			}
 		}
 		if(size_bits >= prob_bits){
@@ -99,16 +113,26 @@ size_t encode_entropy(
 		}
 		expected_clamped_size += size_bits;
 	}
+	while(upper_clamp_index < clamp_number){
+		upper_clamps[upper_clamp_index++] = 0;
+	}
 	expected_clamped_size += size_bits*(climb2 - climb - 1);
 	expected_clamped_size = (expected_clamped_size + 8 - 1)/8;
 	//printf("tab %d %d\n",(int)expected_raw_size,(int)expected_clamped_size);
+
+	if(diagnostics){
+		printf("  range: %d\n",(int)range);
+		for(size_t i=0;i<clamp_number;i++){
+			printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
+		}
+	}
 
 	if(0/*remove when decoder ready*/ || (expected_raw_size < expected_clamped_size)){
 		entropy_mode = 1;
 		table_storage_mode = 1;
 		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
-		uint8_t current_byte;
+		uint8_t current_byte = 0;
 		for(int i=0;i<range;i++){
 			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[i],maximum_bits_per_symbol);
 		}
@@ -121,8 +145,7 @@ size_t encode_entropy(
 		table_storage_mode = 2;
 		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
-		uint8_t current_byte;
-		uint8_t clamp_number = ((prob_bits - 1)/4 + 2);
+		uint8_t current_byte = 0;
 		for(int i=0;i<clamp_number;i++){
 			stuffer(
 				output_bytes,
@@ -140,7 +163,6 @@ size_t encode_entropy(
 				(uint32_t)upper_clamps[i],
 				maximum_bits_per_symbol
 			);
-			//printf("  clamps: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
 		}
 		for(int i=0;i<range;i++){
 			uint8_t symbol_bits = 0;
@@ -171,6 +193,9 @@ size_t encode_entropy(
 			output_bytes[entropy_size++] = current_byte;
 		}
 	}
+	if(diagnostics){
+		printf("entropy_size %d\n",(int)entropy_size);
+	}
 //end encode table
 
 	static size_t out_max_size = 32<<20; // 32MB
@@ -196,7 +221,9 @@ size_t encode_entropy(
 	Rans64EncFlush(&rans, &ptr);
 	uint32_t* rans_begin = ptr;
 
-	//printf("---rANS size: %d\n",(int)((out_end - rans_begin)*4));
+	if(diagnostics){
+		printf("---rANS size: %d\n",(int)((out_end - rans_begin)*4));
+	}
 	write_varint(output_bytes, &entropy_size, (out_end - rans_begin)*4);
 
 	while(rans_begin < out_end){
@@ -212,11 +239,13 @@ size_t encode_entropy(
 	if(expected_stored_size < entropy_size){
 		entropy_mode = 0;
 		entropy_size = 0;
+		table_storage_mode = 0;
+		prob_bits = 0;
 		write_varint(output_bytes, &entropy_size, range-1);
 		write_varint(output_bytes, &entropy_size, symbol_size);
 		output_bytes[entropy_size++] = 0;
 		uint8_t bits_remaining = 8;
-		uint8_t current_byte;
+		uint8_t current_byte = 0;
 		for(size_t i=0;i<symbol_size;i++){
 			stuffer(
 				output_bytes,
@@ -229,15 +258,14 @@ size_t encode_entropy(
 		}
 	}
 
-//diagnostics
-/*
-	printf("entropy_mode       : %d\n",(int)entropy_mode);
-	printf("prob_bits          : %d\n",(int)prob_bits);
-	printf("table_storage_mode : %d\n",(int)table_storage_mode);
-	printf("range              : %d\n",(int)range);
-	printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
-	printf("symbols            : %d\n",(int)symbol_size);
-*/
+	if(diagnostics){
+		printf("entropy_mode       : %d\n",(int)entropy_mode);
+		printf("prob_bits          : %d\n",(int)prob_bits);
+		printf("table_storage_mode : %d\n",(int)table_storage_mode);
+		printf("range              : %d\n",(int)range);
+		printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+		printf("symbols            : %d\n",(int)symbol_size);
+	}
 	
 	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;

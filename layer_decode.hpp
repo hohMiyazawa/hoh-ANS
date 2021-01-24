@@ -73,6 +73,7 @@ uint8_t* decode_layer(
 	else if(compaction_mode == 7){
 	}
 
+	printf("prediction mode: %d\n",prediction_mode);
 
 	if(prediction_mode){
 
