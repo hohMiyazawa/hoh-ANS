@@ -201,7 +201,7 @@ size_t encode_tile(
 		else{
 			//TODO 8bit for less memory usage
 			uint16_t* GREY = channel_picker(in_bytes, in_size, 3, 0);
-			best_size = layer_encode(
+			channel_size1 = layer_encode(
 				GREY,
 				in_size/3,
 				width,
@@ -226,7 +226,7 @@ size_t encode_tile(
 		uint16_t* BLUE_G = new uint16_t[split_size];
 		subtract_green(in_bytes, in_size, GREEN, RED_G, BLUE_G);
 
-		size_t channel_size1 = layer_encode(
+		channel_size1 = layer_encode(
 			GREEN,
 			split_size,
 			width,
@@ -240,7 +240,7 @@ size_t encode_tile(
 		channel_compressed2 = new uint8_t[in_size + 256];
 		channel_compressed3 = new uint8_t[in_size + 256];
 
-		size_t rchannel_size2 = layer_encode(
+		channel_size2 = layer_encode(
 			RED_G,
 			split_size,
 			width,
@@ -251,7 +251,7 @@ size_t encode_tile(
 			channel_compressed2
 		);
 
-		size_t channel_size3 = layer_encode(
+		channel_size3 = layer_encode(
 			BLUE_G,
 			split_size,
 			width,
@@ -341,6 +341,9 @@ size_t encode_tile(
 
 	//never reorder
 	if(channel_number == 1){
+		for(size_t i=0;i<channel_size1;i++){
+			out_buf[out_start++] = channel_compressed1[i];
+		}
 	}
 	else if(channel_number == 2){
 		out_buf[out_start++] = 0b00000100;//xx xx 1 0
@@ -463,7 +466,6 @@ int main(int argc, char *argv[]){
 
 		uint8_t* tile_queue[x_tiles*y_tiles];
 		size_t tile_queue_sizes[x_tiles*y_tiles];
-
 		for(int i=0;i<x_tiles*y_tiles;i++){
 			int new_width = tile_width;
 			int new_height = tile_height;

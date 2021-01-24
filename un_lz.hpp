@@ -21,6 +21,50 @@ uint16_t* un_lz(
 		}
 		return LEMPEL_BACKREF;
 	}
+	if(backref_size == 0){//1byte backrefs, not implemented yet
+		if(joined){
+		}
+		else{
+		}
+	}
+	else{
+		if(joined){//not implemented
+		}
+		else{
+			size_t symbol1_size;
+			uint8_t* entropy1 = decode_entropy_8bit(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&symbol1_size,
+				1
+			);
+			size_t symbol2_size;
+			uint8_t* entropy2 = decode_entropy_8bit(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&symbol2_size,
+				1
+			);
+			size_t symbol3_size;
+			uint8_t* entropy3 = decode_entropy_8bit(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&symbol3_size,
+				1
+			);
+			size_t symbol4_size;
+			uint8_t* entropy4 = decode_entropy_8bit(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&symbol4_size,
+				1
+			);
+		}
+	}
 	return LEMPEL_BACKREF;
 }
 
