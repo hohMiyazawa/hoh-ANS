@@ -430,6 +430,10 @@ int main(int argc, char *argv[]){
 	else if(argc > 4 && strcmp(argv[5],"-s4") == 0){
 		cruncher_mode = 4;
 	}
+	else if(argc > 4){
+		printf("invalid speed setting\n");
+		print_usage();
+	}
 
 	size_t in_size;
 	uint8_t* in_bytes = read_file(argv[1], &in_size);

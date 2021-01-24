@@ -261,6 +261,16 @@ size_t layer_encode(
 				new_cost += tile_cost;
 			}
 			//printf("total entropy 4 %f\n",new_cost/8);
+			predict = channelpredict_all(
+				data,
+				size,
+				width,
+				height,
+				depth,
+				x_tiles,
+				y_tiles,
+				predictor_list
+			);
 		}
 		delete[] predictor_list;
 		//printf("tiles %d\n",total_tiles);
@@ -275,13 +285,13 @@ size_t layer_encode(
 			masks_used[j] = 0;
 		}
 		for(int i=0;i<total_tiles;i++){
-			masks_used[predictor_list[i]] = 1;
+			masks_used[predictor_index_list[i]] = 1;
 		}
-
 		uint8_t used_predictors = 0;
 		for(int j=0;j<14;j++){
 			used_predictors += masks_used[j];
 		}
+//
 		compressed[output_index++] = used_predictors;
 		for(int j=0;j<14;j++){
 			if(masks_used[j]){
@@ -307,15 +317,14 @@ size_t layer_encode(
 			8,
 			0//no diagnostic
 		);
-		printf("predictor map overhead: %d\n",(int)predictor_map_size);
 		output_index += predictor_map_size;
 		delete[] predictor_index_list;
 	}
 	else{
 		compressed[output_index++] = 0;//x tiles-1
 		compressed[output_index++] = 0;//y tiles-1
-		compressed[output_index++] = 0b00000000;
-		compressed[output_index++] = 0b00010000;
+		compressed[output_index++] = 0b00000000;//FFV1 predictor upper bits
+		compressed[output_index++] = 0b00010000;//FFV1 predictor lower bits
 	}
 	if(cruncher_mode){
 		size_t temp_size;
