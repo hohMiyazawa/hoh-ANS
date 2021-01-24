@@ -41,14 +41,21 @@ int main(int argc, char *argv[]){
 
 //DECODE
 
+	uint16_t* LEMPEL_BACKREF = new uint16_t[20];
+	for(int i=0;i<20;i++){
+		LEMPEL_BACKREF[i] = 0;//no LZ freebies
+	}
+
 	uint8_t* decompressed = decode_layer(
 		compressed,
 		data_size,
 		0,
 		5,//width
 		4,//height
-		8//depth
+		8,//depth
+		LEMPEL_BACKREF
 	);
+	delete[] LEMPEL_BACKREF;
 	delete[] compressed;
 
 	for(int i=0;i<20;i++){

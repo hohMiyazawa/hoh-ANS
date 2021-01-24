@@ -2,6 +2,7 @@
 #define LAYER_DECODE_HEADER
 
 #include "entropy_decoding.hpp"
+#include "unprediction.hpp"
 
 uint8_t* decode_layer(
 	uint8_t* in_bytes,
@@ -9,7 +10,8 @@ uint8_t* decode_layer(
 	size_t byte_pointer,
 	size_t width,
 	size_t height,
-	uint8_t bit_depth
+	uint8_t bit_depth,
+	uint16_t* LEMPEL_BACKREF
 ){
 	uint8_t channel_transforms = in_bytes[byte_pointer++];
 	uint8_t compaction_mode = (channel_transforms & 0b11100000)>>5;
@@ -18,7 +20,7 @@ uint8_t* decode_layer(
 	uint8_t* decoded = new uint8_t[width*height];
 	uint8_t colour_map[1<<bit_depth];
 	if(compaction_mode == 0){
-		printf("    no channel compaction\n");
+		//printf("    no channel compaction\n");
 		//as-is
 		for(int i=0;i<(1<<bit_depth);i++){
 			colour_map[i] = i;
@@ -76,11 +78,15 @@ uint8_t* decode_layer(
 
 		size_t x_tiles = in_bytes[byte_pointer++] + 1;
 		size_t y_tiles = in_bytes[byte_pointer++] + 1;
+
+		uint16_t* tile_map = new uint16_t[x_tiles * y_tiles];
+
 		if(x_tiles == 1 && y_tiles == 1){
 			uint16_t predictor_bits = in_bytes[byte_pointer++];
 			uint16_t lower_bits = in_bytes[byte_pointer++];
 			predictor_bits = (predictor_bits<<8) + lower_bits;
-			printf("    predictor %d\n",(int)predictor_bits);
+			//printf("    predictor %d\n",(int)predictor_bits);
+			tile_map[0] = predictor_bits;
 		}
 		else{
 			printf("    unimplemented prediction mode!\n");
@@ -102,13 +108,23 @@ uint8_t* decode_layer(
 			&symbol_size,
 			0//no diagnostic
 		);
-		for(size_t i=0;i<symbol_size;i+= width){
-			printf("%d %d %d %d %d\n",(int)symbols[i],(int)symbols[i+1],(int)symbols[i+2],(int)symbols[i+3],(int)symbols[i+4]);
-		}
-
-		//add unpredictor
-
+		uint16_t* hopefully_original = unpredict_all(
+			symbols,
+			symbol_size,
+			width,
+			height,
+			bit_depth,
+			x_tiles,
+			y_tiles,
+			tile_map,
+			LEMPEL_BACKREF
+		);
+		delete[] tile_map;
 		delete[] symbols;
+		for(size_t i=0;i<width*height;i++){
+			decoded[i] = hopefully_original[i];
+		}
+		delete[] hopefully_original;
 	}
 	else{
 		size_t symbol_size;

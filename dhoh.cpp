@@ -136,8 +136,13 @@ uint8_t* decode_tile(
 	uint8_t backref_size     = (lempel_ziv_mode & 0b00000010)>>1;
 	uint8_t bundled_channels = (lempel_ziv_mode & 0b00000100)>>2;
 	uint8_t lempel_ziv_rans  = (lempel_ziv_mode & 0b00001000)>>3;
+	
+	uint16_t* LEMPEL_BACKREF = new uint16_t[width*height];
 	if(has_lempel_ziv == 0){
 		printf("  no Lempel-Ziv transform\n");
+		for(size_t i = 0;i<width*height;i++){
+			LEMPEL_BACKREF[i] = 0;
+		}
 	}
 	else{
 		printf("  Lempel-Ziv transform\n");
@@ -169,7 +174,8 @@ uint8_t* decode_tile(
 			byte_pointer,
 			width,
 			height,
-			bit_depth
+			bit_depth,
+			LEMPEL_BACKREF
 		);
 		if(pixel_format == pixel_format_internal){
 			delete[] decoded;
@@ -227,7 +233,8 @@ uint8_t* decode_tile(
 			byte_pointer,
 			width,
 			height,
-			bit_depth
+			bit_depth,
+			LEMPEL_BACKREF
 		);
 		uint8_t* decoded_channel2 = decode_layer(
 			in_bytes,
@@ -235,7 +242,8 @@ uint8_t* decode_tile(
 			byte_pointer + offset1,
 			width,
 			height,
-			bit_depth
+			bit_depth,
+			LEMPEL_BACKREF
 		);
 		uint8_t* decoded_channel3 = decode_layer(
 			in_bytes,
@@ -243,7 +251,8 @@ uint8_t* decode_tile(
 			byte_pointer + offset1 + offset2,
 			width,
 			height,
-			bit_depth
+			bit_depth,
+			LEMPEL_BACKREF
 		);
 		if(pixel_format == 2){
 			//default order GRB, not honoring channel reordering at the moment
@@ -257,6 +266,7 @@ uint8_t* decode_tile(
 	}
 	else if(channel_number_internal == 4){
 	}
+	delete[] LEMPEL_BACKREF;
 	return decoded;
 }
 
