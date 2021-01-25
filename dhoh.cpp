@@ -70,13 +70,19 @@ uint8_t* decode_tile(
 				new_width,
 				new_height
 			);
-/*
 			for(int y=0;y<new_height;y++){
 				for(int x=0;x<new_width;x++){
-					decoded[(y + y_offset) * width + x + x_offset] = decoded_tile_data[y * new_width + x];
+					for(int chan=0;chan<channel_number;chan++){
+						decoded[
+							((y + y_offset) * width + x + x_offset)*channel_number
+							+ chan
+						] = decoded_tile_data[
+							(y * new_width + x)*channel_number
+							+ chan
+						];
+					}
 				}
 			}
-*/
 			delete[] decoded_tile_data;
 		}
 		return decoded;
@@ -142,7 +148,6 @@ uint8_t* decode_tile(
 		width,
 		height
 	);
-/*
 
 	if(channel_number_internal == 1){
 		//no need for additional channel information
@@ -244,7 +249,7 @@ uint8_t* decode_tile(
 	}
 	else if(channel_number_internal == 4){
 	}
-*/
+
 	delete[] LEMPEL_BACKREF;
 	return decoded;
 }
