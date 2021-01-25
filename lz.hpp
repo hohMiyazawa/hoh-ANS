@@ -15,7 +15,7 @@ size_t find_lz_rgb(
 ){
 	size_t byte_pointer = 0;
 
-	int lz_index = 0;
+	//int lz_index = 0;
 	int since_last = 0;
 	int limit_distance = (1<<distance);
 
@@ -29,7 +29,7 @@ size_t find_lz_rgb(
 	size_t lz_backby_size = 0;
 	size_t lz_backby2_size = 0;
 
-	for(int i=0;i<size;i+=3){
+	for(size_t i=0;i<size;i+=3){
 		int longest = 0;
 		int best_back = -1;
 		for(int back=1;back<=limit_distance && i - back*3 >= 0;back++){
@@ -85,10 +85,10 @@ size_t find_lz_rgb(
 			lz_future[lz_future_size++] = since_last;
 			if(distance > 8){
 				//lz_symbols[lz_index++] = (best_back - 1) / 256;
-				lz_backby2[lz_backby2_size++] = (best_back - 1) / 256;
+				lz_backby2[lz_backby2_size++] = (best_back) / 256;
 			}
 			//lz_symbols[lz_index++] = (best_back - 1) % 256;
-			lz_backby[lz_backby_size++] = (best_back - 1) % 256;
+			lz_backby[lz_backby_size++] = (best_back) % 256;
 			//lz_symbols[lz_index++] = (longest - 4);
 			lz_length[lz_length_size++] = (longest - 4);
 			since_last = 0;

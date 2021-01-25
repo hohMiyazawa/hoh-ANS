@@ -84,8 +84,32 @@ uint16_t* un_lz(
 
 			printf("pointer %d \n",(int)(*byte_pointer));
 
-			for(size_t i=0;i<width*height;i++){
+			size_t index = 0;
+
+			size_t group = 0;
+
+			for(size_t i=0;i<lz_future_size;i++){
+				size_t count = 0;
+				while(lz_future[i] == 255){
+					count += 255;
+					i++;
+				};
+				count += lz_future[i];
+				for(size_t j=0;j<count;j++){
+					LEMPEL_BACKREF[index++] = 0;
+				}
+				size_t length = (size_t)(lz_length[group]) + 4;
+				uint16_t backby = (((uint16_t)(lz_backby2[group]))<<8) + (uint16_t)(lz_backby[group]);
+				group++;
+				for(size_t j=0;j<length;j++){
+					LEMPEL_BACKREF[index++] = backby;
+				}
 			}
+
+			delete[] lz_future;
+			delete[] lz_length;
+			delete[] lz_backby;
+			delete[] lz_backby2;
 		}
 	}
 	return LEMPEL_BACKREF;

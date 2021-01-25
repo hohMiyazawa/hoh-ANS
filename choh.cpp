@@ -20,7 +20,7 @@ int count_colours(uint8_t* in_bytes, size_t in_size){
 	uint8_t blue[256];
 	int palette_index = 0;
 
-	for(int i=0;i<in_size;i += 3){
+	for(size_t i=0;i<in_size;i += 3){
 		int found = 0;
 		for(int j=0;j<palette_index;j++){
 			if(
@@ -50,7 +50,7 @@ int palette_encode(
 	size_t in_size,
 	int width,
 	int height,
-	int cruncher_mode,
+	size_t cruncher_mode,
 	uint8_t* LEMPEL_NUKE,
 	uint8_t* compressed
 ){
@@ -61,7 +61,7 @@ int palette_encode(
 
 	uint16_t* INDEXED = new uint16_t[in_size/3];
 
-	for(int i=0;i<in_size;i += 3){
+	for(size_t i=0;i<in_size;i += 3){
 		int found = 0;
 		for(int j=0;j<palette_index;j++){
 			if(
@@ -87,9 +87,6 @@ int palette_encode(
 		}
 	}
 
-	uint32_t* pred_buf_1;
-	uint32_t* pred_end_1;
-	uint32_t* pred_rans_begin_1;
 	int encoded_size = layer_encode(
 		INDEXED,
 		in_size/3,
@@ -110,9 +107,8 @@ size_t encode_tile(
 	uint8_t* out_buf,
 	int width,
 	int height,
-	int cruncher_mode
+	size_t cruncher_mode
 ){
-	size_t out_max_size = in_size + 256;//safety margin
 	size_t out_start = 0;
 
 	// 1x1 tile image
@@ -120,12 +116,9 @@ size_t encode_tile(
 	out_buf[out_start++] = 0;
 	//no offsets needed
 
-	static const uint32_t prob_bits = 16;
-	static const uint32_t prob_scale = 1 << prob_bits;
-
 	uint8_t* LEMPEL = new uint8_t[in_size/3];
 	uint8_t* LEMPEL_NUKE = new uint8_t[in_size/3];
-	for(int i=0;i<in_size/3;i++){
+	for(size_t i=0;i<in_size/3;i++){
 		LEMPEL_NUKE[i] = 0;
 	}
 
@@ -175,9 +168,9 @@ size_t encode_tile(
 	int internal_colour_mode = 2;//rgb default
 	uint8_t channel_number = 3;
 
-	size_t channel_size1;
-	size_t channel_size2;
-	size_t channel_size3;
+	size_t channel_size1 = 0;
+	size_t channel_size2 = 0;
+	size_t channel_size3 = 0;
 
 	uint8_t* channel_compressed1 = new uint8_t[in_size + 256];
 	uint8_t* channel_compressed2;
@@ -306,7 +299,7 @@ size_t encode_tile(
 		uint8_t* channel_compressed_indexed = new uint8_t[in_size + 256];
 		int palette_size = palette_encode(in_bytes, in_size, width, height, cruncher_mode, LEMPEL_NUKE, channel_compressed_indexed);
 
-		if(palette_size != -1 && palette_size + lz_external_overhead < best_size){
+		if(palette_size != -1 && palette_size + lz_external_overhead < (size_t)best_size){
 			best_size = palette_size + lz_external_overhead;
 			internal_colour_mode = 127;//indexed
 			channel_number = 1;
@@ -314,7 +307,7 @@ size_t encode_tile(
 			channel_compressed1 = channel_compressed_indexed;
 			channel_compressed_indexed = tmp;
 		}
-		if(rgb_size != -1 && rgb_size + lz_external_overhead < best_size){
+		if(rgb_size != -1 && rgb_size + lz_external_overhead < (size_t)best_size){
 			best_size = rgb_size + lz_external_overhead;
 			internal_colour_mode = 2;//rgb
 			channel_number = 3;
@@ -414,7 +407,7 @@ int main(int argc, char *argv[]){
 		print_usage();
 		return 2;
 	}
-	int cruncher_mode = 1;
+	size_t cruncher_mode = 1;
 	if(argc > 4 && strcmp(argv[5],"-s0") == 0){
 		cruncher_mode = 0;
 	}

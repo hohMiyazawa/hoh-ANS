@@ -14,14 +14,14 @@ size_t layer_encode(
 	int width,
 	int height,
 	int depth,
-	int cruncher_mode,
+	size_t cruncher_mode,
 	uint8_t* LEMPEL_NUKE,
 	uint8_t* compressed
 ){
 	size_t output_index = 0;
 	size_t possible_size = (depth*size + depth*size % 8 + 1024)/8;
 
-	size_t compaction_overhead = 0;
+	//size_t compaction_overhead = 0;
 
 //disabled until parser ready
 /*
@@ -58,10 +58,6 @@ size_t layer_encode(
 
 	uint32_t prob_bits = 15;
 
-	uint32_t* dummy1;
-	uint32_t* dummy2;
-	uint32_t* dummy3;
-
 	size_t chunk_size;
 
 	uint16_t* predict = channelpredict_section(
@@ -96,7 +92,7 @@ size_t layer_encode(
 
 	predict_cleaned = new uint16_t[size];
 	cleaned_pointer = 0;
-	for(int i=0;i<size;i++){
+	for(size_t i=0;i<size;i++){
 		if(LEMPEL_NUKE[i] == 0){
 			predict_cleaned[cleaned_pointer++] = predict[i];
 		}
@@ -123,9 +119,9 @@ size_t layer_encode(
 		dummyrand = tmp;
 	}
 
-	int total_tiles = 1;
+	size_t total_tiles = 1;
 
-	int grid_size = 40;//heuristic
+	size_t grid_size = 40;//heuristic
 
 	if(
 		cruncher_mode
@@ -134,19 +130,20 @@ size_t layer_encode(
 			|| (height + grid_size - 1)/grid_size > 1
 		)
 	){
-		int freqs[1<<(depth)];
-		for(int i=0;i < (1<<(depth));i++){
+		size_t range = 1<<(depth);
+		int freqs[range];
+		for(size_t i=0;i < range;i++){
 			freqs[i] = 1;//to have no zero values, so the frequency table is usable for other predictors
 		}
-		for(int i=0;i<size;i++){
+		for(size_t i=0;i<size;i++){
 			freqs[predict[i]]++;
 		}
-		double entropy[1<<(depth)];
-		for(int i=0;i < (1<<(depth));i++){
+		double entropy[range];
+		for(size_t i=0;i < range;i++){
 			entropy[i] = -std::log2((double)freqs[i]/(double)size);
 		}
 		double total_entropy = 0;
-		for(int i=0;i < (1<<(depth));i++){
+		for(size_t i=0;i < range;i++){
 			total_entropy += entropy[i] * (freqs[i] - 1);
 		}
 
@@ -157,7 +154,9 @@ size_t layer_encode(
 		uint8_t* predictor_index_list = new uint8_t[total_tiles];
 		double new_cost = 0;
 
-		uint16_t masks[14] = {
+		size_t stock_predictors = 14;
+
+		uint16_t masks[stock_predictors] = {
 			0b0000000000000001,
 			0b0000000000000010,
 			0b0000000000100000,
@@ -174,9 +173,9 @@ size_t layer_encode(
 
 			0b1111111111111111
 		};
-		for(int i=0;i<total_tiles;i++){
+		for(size_t i=0;i<total_tiles;i++){
 			double tile_cost = 99999999999;//yea, fix this later
-			for(int pred=0;pred<14 && pred < cruncher_mode*5;pred++){
+			for(size_t pred=0;pred<stock_predictors && pred < cruncher_mode*5;pred++){
 				uint16_t* tile_predict = channelpredict_section(
 					data,
 					size,
@@ -191,7 +190,7 @@ size_t layer_encode(
 					&chunk_size
 				);
 				double current_cost = 0;
-				for(int val=0;val<chunk_size;val++){
+				for(size_t val=0;val<chunk_size;val++){
 					current_cost += entropy[tile_predict[val]];
 				}
 				if(current_cost < tile_cost){
@@ -215,25 +214,25 @@ size_t layer_encode(
 		);
 		if(cruncher_mode > 2){//refine estimate
 
-			for(int i=0;i < (1<<(depth));i++){
+			for(size_t i=0;i < range;i++){
 				freqs[i] = 1;
 			}
-			for(int i=0;i<size;i++){
+			for(size_t i=0;i<size;i++){
 				freqs[predict[i]]++;
 			}
-			for(int i=0;i < (1<<(depth));i++){
+			for(size_t i=0;i < range;i++){
 				entropy[i] = -std::log2((double)freqs[i]/(double)size);
 			}
 			total_entropy = 0;
-			for(int i=0;i < (1<<(depth));i++){
+			for(size_t i=0;i < range;i++){
 				total_entropy += entropy[i] * (freqs[i] - 1);
 			}
 			//printf("total entropy 3 %f\n",total_entropy/8);
 
 			new_cost = 0;
-			for(int i=0;i<total_tiles;i++){
+			for(size_t i=0;i<total_tiles;i++){
 				double tile_cost = 99999999999;//yea, fix this later
-				for(int pred=0;pred<14 && pred < cruncher_mode*5;pred++){
+				for(size_t pred=0;pred<stock_predictors && pred < cruncher_mode*5;pred++){
 					uint16_t* tile_predict = channelpredict_section(
 						data,
 						size,
@@ -248,7 +247,7 @@ size_t layer_encode(
 						&chunk_size
 					);
 					double current_cost = 0;
-					for(int val=0;val<chunk_size;val++){
+					for(size_t val=0;val<chunk_size;val++){
 						current_cost += entropy[tile_predict[val]];
 					}
 					if(current_cost < tile_cost){
@@ -277,28 +276,28 @@ size_t layer_encode(
 		compressed[output_index++] = x_tiles-1;
 		compressed[output_index++] = y_tiles-1;
 
-		uint8_t masks_used[14];
-		for(int j=0;j<14;j++){
+		uint8_t masks_used[stock_predictors];
+		for(size_t j=0;j<stock_predictors;j++){
 			masks_used[j] = 0;
 		}
-		for(int i=0;i<total_tiles;i++){
+		for(size_t i=0;i<total_tiles;i++){
 			masks_used[predictor_index_list[i]] = 1;
 		}
 		uint8_t used_predictors = 0;
-		for(int j=0;j<14;j++){
+		for(size_t j=0;j<stock_predictors;j++){
 			used_predictors += masks_used[j];
 		}
 //
 		compressed[output_index++] = used_predictors;
-		for(int j=0;j<14;j++){
+		for(size_t j=0;j<stock_predictors;j++){
 			if(masks_used[j]){
 				compressed[output_index++] = (uint8_t)(masks[j]>>8);
 				compressed[output_index++] = (uint8_t)(masks[j] % 256);
 			}
 		}
-		uint8_t mapper[14];
+		uint8_t mapper[stock_predictors];
 		uint8_t counter = 0;
-		for(int j=0;j<14;j++){
+		for(size_t j=0;j<stock_predictors;j++){
 			if(masks_used[j]){
 				mapper[j] = counter++;
 			}
@@ -327,7 +326,7 @@ size_t layer_encode(
 	if(cruncher_mode){
 		size_t temp_size;
 		cleaned_pointer = 0;
-		for(int j=0;j<size;j++){
+		for(size_t j=0;j<size;j++){
 			if(LEMPEL_NUKE[j] == 0){
 				predict_cleaned[cleaned_pointer++] = predict[j];
 			}

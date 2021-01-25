@@ -16,11 +16,14 @@ static void panic(const char *fmt, ...){
 	exit(1);
 }
 
+//unused
+/*
 static void write_file(char const* filename, uint32_t* start, uint32_t* end){
 	std::ofstream outfile(filename,std::ofstream::binary);
 	outfile.write((char*)&start,(int) ((end - start) * sizeof(uint32_t)));
 	outfile.close();
 }
+*/
 
 static void write_file(char const* filename, uint8_t* start, size_t size){
 	std::ofstream file(filename,std::ofstream::binary);

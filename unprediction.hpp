@@ -37,7 +37,6 @@ uint16_t* unpredict_all(
 		forige_TL = centre/2;
 		for(int x_m=0;x_m < width;x_m++){
 			int datalocation = y_m*width + x_m;
-			uint16_t prediction;
 			uint16_t predictor = tile_map[(y_m/tile_height) * x_tiles + (x_m/tile_width)];
 			uint16_t L = forige;
 			uint16_t T = top_row[x_m];

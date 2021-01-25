@@ -46,14 +46,14 @@ uint16_t* decode_entropy(
 		uint8_t slag = 0;
 		uint8_t slag_bits = 0;
 		if(table_storage_mode == 0){
-			for(int i=0;i<symbol_range;i++){
+			for(size_t i=0;i<symbol_range;i++){
 				freqs[i] = 1;
 			}
 			normalize_freqs(freqs,cum_freqs,symbol_range,1<<prob_bits);
 		}
 		else if(table_storage_mode == 1){
 			//raw values for freqs
-			for(int i=0;i<symbol_range;i++){
+			for(size_t i=0;i<symbol_range;i++){
 				freqs[i] = unstuffer(
 					in_bytes,
 					byte_pointer,
@@ -90,7 +90,7 @@ uint16_t* decode_entropy(
 					printf("  clamps_D: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
 				}
 			}
-			for(int i=0;i<symbol_range;i++){
+			for(size_t i=0;i<symbol_range;i++){
 				uint8_t symbol_bits = 0;
 				if(lower_clamps[0] <= i && upper_clamps[0] >= i){
 					symbol_bits = 1;
@@ -129,12 +129,12 @@ uint16_t* decode_entropy(
 
 		size_t data_size = read_varint(in_bytes, byte_pointer);
 		printf("---rANS size: %d\n",(int)data_size);
-		for(int i=0; i < symbol_range; i++) {
+		for(size_t i=0; i < symbol_range; i++) {
 			//printf("        dsyms %d %d\n",(int)cum_freqs[i], (int)freqs[i]);
 			Rans64DecSymbolInit(&dsyms[i], cum_freqs[i], freqs[i]);
 		}
 		uint16_t cum2sym[1<<prob_bits];
-		for(int s=0; s < symbol_range; s++){
+		for(size_t s=0; s < symbol_range; s++){
 			for(uint32_t i=cum_freqs[s]; i < cum_freqs[s+1]; i++){
 		   		 cum2sym[i] = s;
 			}

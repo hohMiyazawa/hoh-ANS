@@ -78,6 +78,8 @@ static void subtract_green(uint8_t* source, size_t size, uint16_t* GREEN, uint16
 	}
 }
 
+//unused
+/*
 static void rgb_to_yiq(uint8_t* source, size_t size, uint8_t* Y, uint16_t* I, uint16_t* Q){
 	for (size_t i=0; i < size/3; i++) {
 		uint8_t R = source[i*3 + 0];
@@ -88,7 +90,10 @@ static void rgb_to_yiq(uint8_t* source, size_t size, uint8_t* Y, uint16_t* I, ui
 		Q[i] = (uint16_t)((int)G - (((int)R + (int)B)>>1) + 256);
 	}
 }
+*/
 
+//unused
+/*
 static void palette_compact(uint8_t* source, size_t size){
 	int histogram[256];
 	for(int i=0;i<256;i++){
@@ -109,5 +114,6 @@ static void palette_compact(uint8_t* source, size_t size){
 		source[i] = source[i] - moving_table[source[i]];
 	}
 }
+*/
 
 #endif // CHANNEL_HEADER

@@ -147,7 +147,7 @@ uint8_t* decode_layer(
 			&symbol_size,
 			0//no diagnostic
 		);
-		for(int i=0;i<symbol_size;i++){
+		for(size_t i=0;i<symbol_size;i++){
 			decoded[i] = (uint8_t)symbols[i];
 		}
 		delete[] symbols;

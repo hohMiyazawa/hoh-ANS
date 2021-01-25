@@ -57,7 +57,7 @@ size_t encode_entropy(
 	size_t climb = 0;
 	size_t lower_clamp_index = 0;
 	for(;climb<range;climb++){
-		while(freqs[climb] >= (1<<size_bits)){
+		while(freqs[climb] >= (size_t)(1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
 				lower_clamps[0] = climb;
@@ -89,7 +89,7 @@ size_t encode_entropy(
 	size_t upper_clamp_index = 0;
 	for(;climb2 > climb;climb2--){
 		//printf("  climb2: %d\n",(int)climb2);
-		while(freqs[climb2] >= (1<<size_bits)){
+		while(freqs[climb2] >= (size_t)(1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
 				upper_clamps[0] = climb2;
@@ -133,7 +133,7 @@ size_t encode_entropy(
 		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte = 0;
-		for(int i=0;i<range;i++){
+		for(size_t i=0;i<range;i++){
 			stuffer(output_bytes,&entropy_size,&current_byte,&bits_remaining,(uint32_t)freqs[i],maximum_bits_per_symbol);
 		}
 		if(bits_remaining != 8){
@@ -146,7 +146,7 @@ size_t encode_entropy(
 		output_bytes[entropy_size++] = (entropy_mode<<7) + (prob_bits<<2) + table_storage_mode;
 		uint8_t bits_remaining = 8;
 		uint8_t current_byte = 0;
-		for(int i=0;i<clamp_number;i++){
+		for(size_t i=0;i<clamp_number;i++){
 			stuffer(
 				output_bytes,
 				&entropy_size,
@@ -164,7 +164,7 @@ size_t encode_entropy(
 				maximum_bits_per_symbol
 			);
 		}
-		for(int i=0;i<range;i++){
+		for(size_t i=0;i<range;i++){
 			uint8_t symbol_bits = 0;
 			if(lower_clamps[0] <= i && upper_clamps[0] >= i){
 				symbol_bits = 1;
@@ -205,7 +205,7 @@ size_t encode_entropy(
 
 	Rans64EncSymbol esyms[range];
 
-	for(int i=0; i < range; i++){
+	for(size_t i=0; i < range; i++){
 		//printf("        esyms %d %d\n",(int)cum_freqs[i], (int)freqs[i]);
 		Rans64EncSymbolInit(&esyms[i], cum_freqs[i], freqs[i], prob_bits);
 	}

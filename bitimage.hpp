@@ -52,7 +52,6 @@ int ranscode_symbols_2(
 	uint32_t* out_end,
 	uint32_t* rans_begin
 ){
-	static const uint32_t prob_scale = 1 << prob_bits;
 
 	static size_t out_max_size = 32<<20; // 32MB
 	static size_t out_max_elems = out_max_size / sizeof(uint32_t);
@@ -147,7 +146,7 @@ int bitimage_encode(
 	for(int i=0;i<width;i++){
 		top_row[i] = 0;
 	}
-	for (int i=0; i < size; i++){
+	for(size_t i=0; i < size; i++){
 		uint8_t L = forige;
 		uint8_t T = top_row[i % width];
 		uint8_t TL = forige_TL;

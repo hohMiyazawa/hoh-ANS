@@ -7,7 +7,6 @@
 
 #include "varint.hpp"
 #include "file_io.hpp"
-#include "channel.hpp"
 #include "bitimage.hpp"
 #include "entropy_decoding.hpp"
 #include "layer_decode.hpp"
@@ -37,12 +36,12 @@ uint8_t* decode_tile(
 
 	if(x_tiles != 1 || y_tiles != 1){
 		printf("tiled image: %dx%d (%d tiles)\n",(int)x_tiles,(int)y_tiles,(int)x_tiles * (int)y_tiles);
-		int offsets[x_tiles*y_tiles];
+		size_t offsets[x_tiles*y_tiles];
 		offsets[0] = 0;
 		printf("  tile offset 0: 0\n");
-		for(int i=1;i<x_tiles*y_tiles;i++){
+		for(size_t i=1;i<x_tiles*y_tiles;i++){
 			offsets[i] = read_varint(in_bytes, &byte_pointer);
-			printf("  tile offset %d: %d\n",i,offsets[i]);
+			printf("  tile offset %d: %d\n",(int)i,(int)offsets[i]);
 		}
 
 		int tile_width = (width + x_tiles - 1)/x_tiles;
@@ -50,10 +49,10 @@ uint8_t* decode_tile(
 		int cummulative_offset = 0;
 		for(int i=0;i<x_tiles*y_tiles;i++){
 			cummulative_offset += offsets[i];
-			int x_offset = (i % x_tiles) * tile_width;
-			int y_offset = (i / x_tiles) * tile_height;
-			int new_width = tile_width;
-			int new_height = tile_height;
+			size_t x_offset = (i % x_tiles) * tile_width;
+			size_t y_offset = (i / x_tiles) * tile_height;
+			size_t new_width = tile_width;
+			size_t new_height = tile_height;
 			if(width - x_offset < new_width){
 				new_width = width - x_offset;
 			}
@@ -70,9 +69,9 @@ uint8_t* decode_tile(
 				new_width,
 				new_height
 			);
-			for(int y=0;y<new_height;y++){
-				for(int x=0;x<new_width;x++){
-					for(int chan=0;chan<channel_number;chan++){
+			for(size_t y=0;y<new_height;y++){
+				for(size_t x=0;x<new_width;x++){
+					for(size_t chan=0;chan<channel_number;chan++){
 						decoded[
 							((y + y_offset) * width + x + x_offset)*channel_number
 							+ chan
@@ -169,23 +168,47 @@ uint8_t* decode_tile(
 		uint8_t channel_reordering = in_bytes[byte_pointer++];
 		uint8_t bit1 = channel_reordering & 1;
 		uint8_t bit2 = channel_reordering & 2;
+		size_t offset = 0;
 		if(bit1 == 0 && bit2 == 0){
 			//conjoined
 			printf("  conjoined channels\n");
 		}
 		else if(bit1 == 0 && bit2 == 1){
 			//regular order
-			int offset = read_varint(in_bytes, &byte_pointer);
+			offset = read_varint(in_bytes, &byte_pointer);
 			printf("  regular channel layout\n");
 		}
 		else if(bit1 == 1 && bit2 == 0){
 			//inverse order
-			int offset = read_varint(in_bytes, &byte_pointer);
+			offset = read_varint(in_bytes, &byte_pointer);
 			printf("  inverse channel layout\n");
 		}
 		else{
 			//illegal
 			printf("  illegal channel layout!\n");
+		}
+
+		uint8_t* decoded_channel1 = decode_layer(
+			in_bytes,
+			in_size,
+			byte_pointer,
+			width,
+			height,
+			bit_depth,
+			LEMPEL_BACKREF
+		);
+		uint8_t* decoded_channel2 = decode_layer(
+			in_bytes,
+			in_size,
+			byte_pointer + offset,
+			width,
+			height,
+			bit_depth,
+			LEMPEL_BACKREF
+		);
+		for(size_t i=0;i<width*height;i++){
+			decoded[i*3]     = decoded_channel2[i];
+			decoded[i*3 + 1] = decoded_channel1[i];
 		}
 	}
 	else if(channel_number_internal == 3){
@@ -198,6 +221,8 @@ uint8_t* decode_tile(
 		if(bit1 == 0 && bit2 == 0 && bit3 == 0){
 			//conjoined (consider using greyscale internally)
 			printf("  conjoined channels\n");
+			offset1 = 0;
+			offset2 = 0;
 		}
 		else if(bit1 != bit2 && bit1 != bit3){
 			offset1 = read_varint(in_bytes, &byte_pointer);
@@ -206,6 +231,7 @@ uint8_t* decode_tile(
 		}
 		else{
 			offset1 = read_varint(in_bytes, &byte_pointer);
+			offset2 = 0;
 			printf("  semi-conjoined channels\n");
 		}
 
@@ -239,7 +265,7 @@ uint8_t* decode_tile(
 		);
 		if(pixel_format == 2){
 			//default order GRB, not honoring channel reordering at the moment
-			for(int i=0;i<width*height;i++){
+			for(size_t i=0;i<width*height;i++){
 				decoded[i*3]     = decoded_channel2[i];//red
 				decoded[i*3 + 1] = decoded_channel1[i];//green
 				decoded[i*3 + 2] = decoded_channel3[i];//blue

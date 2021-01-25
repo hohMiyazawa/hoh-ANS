@@ -25,14 +25,14 @@ void normalize_freqs(uint32_t* freqs,uint32_t* cum_freqs, size_t size,uint32_t t
 	// the range to make the frequency nonzero from elsewhere.
 	//
 	// this is not at all optimal, i'm just doing the first thing that comes to mind.
-	for (size_t i=0; i < size; i++) {
-		if (freqs[i] && cum_freqs[i+1] == cum_freqs[i]) {
+	for(size_t i=0; i < size; i++) {
+		if(freqs[i] && cum_freqs[i+1] == cum_freqs[i]){
 			// symbol i was set to zero freq
 
 			// find best symbol to steal frequency from (try to steal from low-freq ones)
 			uint32_t best_freq = ~0u;
 			int best_steal = -1;
-			for (size_t j=0; j < size; j++) {
+			for(size_t j=0; j < size; j++){
 				uint32_t freq = cum_freqs[j+1] - cum_freqs[j];
 				if (freq > 1 && freq < best_freq) {
 					best_freq = freq;
@@ -42,13 +42,16 @@ void normalize_freqs(uint32_t* freqs,uint32_t* cum_freqs, size_t size,uint32_t t
 			assert(best_steal != -1);
 
 			// and steal from it!
-			if (best_steal < i) {
-				for (size_t j = best_steal + 1; j <= i; j++)
+			if(best_steal < (int)i){
+				for(size_t j = best_steal + 1; j <= i; j++){
 					cum_freqs[j]--;
-			} else {
-				assert(best_steal > i);
-				for (size_t j = i + 1; j <= best_steal; j++)
+				}
+			}
+			else{
+				assert(best_steal > (int)i);
+				for(int j = i + 1; j <= best_steal; j++){
 					cum_freqs[j]++;
+				}
 			}
 		}
 	}
