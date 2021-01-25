@@ -108,7 +108,7 @@ size_t find_lz_rgb(
 		256,
 		lz_symbols + byte_pointer,
 		10,
-		1
+		0
 	);
 	delete[] lz_future;
 	byte_pointer += lz_overhead1;
@@ -118,7 +118,7 @@ size_t find_lz_rgb(
 		256,
 		lz_symbols + byte_pointer,
 		10,
-		1
+		0
 	);
 	delete[] lz_length;
 	byte_pointer += lz_overhead2;
@@ -128,7 +128,7 @@ size_t find_lz_rgb(
 		256,
 		lz_symbols + byte_pointer,
 		10,
-		1
+		0
 	);
 	delete[] lz_backby;
 	byte_pointer += lz_overhead3;
@@ -141,12 +141,12 @@ size_t find_lz_rgb(
 			256,
 			lz_symbols + byte_pointer,
 			10,
-			1
+			0
 		);
 		byte_pointer += lz_overhead4;
 	}
 	delete[] lz_backby2;
-	printf("lz groups %d %d %d %d\n",(int)lz_future_size,(int)lz_length_size,(int)lz_backby_size,(int)lz_backby2_size);
+	//printf("lz groups %d %d %d %d\n",(int)lz_future_size,(int)lz_length_size,(int)lz_backby_size,(int)lz_backby2_size);
 	//don't consider joined channels yet
 	/*size_t lz_overhead_collected = encode_entropy(
 		lz_symbols,
@@ -162,15 +162,15 @@ size_t find_lz_rgb(
 	/*if(*lz_symbol_size < best_size){
 		best_size = *lz_symbol_size;
 	}*/
-	printf("internal lempel %d|%d + %d|%d + %d|%d + %d|%d = %d\n",
+	/*printf("internal lempel %d|%d + %d|%d + %d|%d + %d|%d = %d\n",
 		(int)lz_overhead1,(int)lz_future_size,
 		(int)lz_overhead2,(int)lz_length_size,
 		(int)lz_overhead3,(int)lz_backby_size,
 		(int)lz_overhead4,(int)lz_backby2_size,
 		(int)(lz_overhead1 + lz_overhead2 + lz_overhead3 + lz_overhead4)
-	);
+	);*/
 	//printf("external lempel %d\n",best_size);
-	printf("lz_total = %d\n",(int)byte_pointer);
+	//printf("lz_total = %d\n",(int)byte_pointer);
 	return byte_pointer;
 }
 

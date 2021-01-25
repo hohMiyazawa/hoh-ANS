@@ -273,7 +273,7 @@ size_t layer_encode(
 			);
 		}
 		delete[] predictor_list;
-		//printf("tiles %d\n",total_tiles);
+		//printf("pred tiles %d\n",total_tiles);
 
 		tile_cost = 4 + (total_tiles)/2;
 
@@ -311,12 +311,13 @@ size_t layer_encode(
 		}
 		size_t predictor_map_size = encode_entropy(
 			predictor_index_list,
-			0,
-			14,
+			total_tiles,
+			used_predictors,
 			compressed + output_index,
 			8,
-			0//no diagnostic
+			0
 		);
+		//printf("pred map %d tiles %d num %d\n",(int)predictor_map_size,(int)total_tiles,(int)used_predictors);
 		output_index += predictor_map_size;
 		delete[] predictor_index_list;
 	}
