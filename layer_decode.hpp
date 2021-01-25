@@ -98,7 +98,18 @@ uint8_t* decode_layer(
 				uint16_t lower_bits = in_bytes[byte_pointer++];
 				combinations[i] = (upper_bits<<8) + lower_bits;
 			}
-			//read map here
+			size_t symbol_size;
+			uint8_t* decoded_pred_map = decode_entropy_8bit(
+				in_bytes,
+				in_size,
+				&byte_pointer,
+				&symbol_size,
+				1
+			);
+			for(size_t i=0;i<symbol_size;i++){
+				tile_map[i] = combinations[decoded_pred_map[i]];
+			}
+			delete[] decoded_pred_map;
 		}
 
 		size_t symbol_size;
