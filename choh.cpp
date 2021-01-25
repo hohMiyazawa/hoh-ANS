@@ -11,7 +11,7 @@
 #include "file_io.hpp"
 #include "channel.hpp"
 #include "lz.hpp"
-#include "bitimage.hpp"
+//#include "bitimage.hpp"
 #include "layer_encode.hpp"
 
 int count_colours(uint8_t* in_bytes, size_t in_size){
@@ -181,14 +181,13 @@ size_t encode_tile(
 		uint8_t* binary = channel_picker8(in_bytes, in_size, 3, 0);
 		if(binary_test(binary, in_size/3)){
 			binarize(binary, in_size/3);
-
-			int bit_size = bitimage_encode(
-				binary,
-				in_size/3,
-				width,
-				height
-			);
-			best_size = bit_size;
+			//int bit_size = bitimage_encode(
+			//	binary,
+			//	in_size/3,
+			//	width,
+			//	height
+			//);
+			//best_size = bit_size;
 			internal_colour_mode = 0;//bitimage
 		}
 		else{
@@ -362,7 +361,6 @@ size_t encode_tile(
 		for(size_t i=0;i<channel_size3;i++){
 			out_buf[out_start++] = channel_compressed3[i];
 		}
-
 		delete[] channel_compressed2;
 		delete[] channel_compressed3;
 	}

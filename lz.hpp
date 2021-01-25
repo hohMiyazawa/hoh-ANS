@@ -32,10 +32,10 @@ size_t find_lz_rgb(
 	for(size_t i=0;i<size;i+=3){
 		int longest = 0;
 		int best_back = -1;
-		for(int back=1;back<=limit_distance && i - back*3 >= 0;back++){
+		for(int back=1;back<=limit_distance && (int)i - back*3 >= 0;back++){
 			int offset = 0;
 			while(
-				i + offset*3 < size
+				i + offset*3 + 2 < size
 				&& source[i + offset*3] == source[i - back*3 + offset*3]
 				&& source[i + offset*3 + 1] == source[i - back*3 + offset*3 + 1]
 				&& source[i + offset*3 + 2] == source[i - back*3 + offset*3 + 2]
@@ -52,7 +52,7 @@ size_t find_lz_rgb(
 			}
 		}
 		if(longest < 259 && distance > 8){
-			for(int back=width;back <= (1<<16) && i - back*3 >= 0;back += width){
+			for(int back=width;back <= (1<<16) && (int)i - back*3 >= 0;back += width){
 				int offset = 0;
 				while(
 					i + offset*3 < size
@@ -76,20 +76,15 @@ size_t find_lz_rgb(
 			since_last++;
 			if(since_last == 255){
 				since_last = 0;
-				//lz_symbols[lz_index++] = 255;
 				lz_future[lz_future_size++] = 255;
 			}
 		}
 		else{
-			//lz_symbols[lz_index++] = since_last;
 			lz_future[lz_future_size++] = since_last;
 			if(distance > 8){
-				//lz_symbols[lz_index++] = (best_back - 1) / 256;
 				lz_backby2[lz_backby2_size++] = (best_back) / 256;
 			}
-			//lz_symbols[lz_index++] = (best_back - 1) % 256;
 			lz_backby[lz_backby_size++] = (best_back) % 256;
-			//lz_symbols[lz_index++] = (longest - 4);
 			lz_length[lz_length_size++] = (longest - 4);
 			since_last = 0;
 			for(int offset = 0;offset < longest;offset++){
@@ -98,7 +93,7 @@ size_t find_lz_rgb(
 			i += (longest - 1)*3;
 		}
 	}
-	//*lz_symbol_size = lz_index;
+	// *lz_symbol_size = lz_index;
 
 	lz_symbols[byte_pointer++] = 0b00000011;
 
