@@ -124,7 +124,6 @@ size_t layer_encode(
 	}
 
 	int total_tiles = 1;
-	int tile_cost = 2;
 
 	int grid_size = 40;//heuristic
 
@@ -274,8 +273,6 @@ size_t layer_encode(
 		}
 		delete[] predictor_list;
 		//printf("pred tiles %d\n",total_tiles);
-
-		tile_cost = 4 + (total_tiles)/2;
 
 		compressed[output_index++] = x_tiles-1;
 		compressed[output_index++] = y_tiles-1;

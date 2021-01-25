@@ -53,8 +53,8 @@ size_t encode_entropy(
 	uint16_t lower_clamps[clamp_number];
 	uint16_t upper_clamps[clamp_number];
 
-	int size_bits = 0;
-	int climb = 0;
+	size_t size_bits = 0;
+	size_t climb = 0;
 	size_t lower_clamp_index = 0;
 	for(;climb<range;climb++){
 		while(freqs[climb] >= (1<<size_bits)){
@@ -85,7 +85,7 @@ size_t encode_entropy(
 		lower_clamps[lower_clamp_index++] = range - 1;
 	}
 	size_bits = 0;
-	int climb2 = range - 1;
+	size_t climb2 = range - 1;
 	size_t upper_clamp_index = 0;
 	for(;climb2 > climb;climb2--){
 		//printf("  climb2: %d\n",(int)climb2);

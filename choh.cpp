@@ -515,7 +515,8 @@ int main(int argc, char *argv[]){
 		}
 	}
 	else{
-		uint8_t* tile_buf;
+		size_t out_max_size = (in_size*3) + 256;//safety margin
+		uint8_t* tile_buf = new uint8_t[out_max_size];
 		tile_size += encode_tile(
 			in_bytes,
 			in_size,
