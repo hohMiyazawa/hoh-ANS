@@ -87,8 +87,7 @@ size_t encode_entropy(
 	size_bits = 0;
 	size_t climb2 = range - 1;
 	size_t upper_clamp_index = 0;
-	for(;climb2 > climb;climb2--){
-		//printf("  climb2: %d\n",(int)climb2);
+	for(;climb2 >= 0;climb2--){
 		while(freqs[climb2] >= (size_t)(1<<size_bits)){
 			if(size_bits == 0){
 				size_bits = 1;
@@ -112,6 +111,9 @@ size_t encode_entropy(
 			break;
 		}
 		expected_clamped_size += size_bits;
+		if(climb2 == 0){
+			break;
+		}
 	}
 	while(upper_clamp_index < clamp_number){
 		upper_clamps[upper_clamp_index++] = 0;
@@ -127,6 +129,9 @@ size_t encode_entropy(
 		}
 	}
 
+	if(diagnostics){
+		printf("entropy_size %d\n",(int)entropy_size);
+	}
 	if(0/*remove when decoder ready*/ || (expected_raw_size < expected_clamped_size)){
 		entropy_mode = 1;
 		table_storage_mode = 1;

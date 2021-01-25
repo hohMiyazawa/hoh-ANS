@@ -86,7 +86,7 @@ uint16_t* decode_entropy(
 					&slag_bits,
 					maximum_bits_per_symbol
 				);
-				if(diagnostics || 1){
+				if(diagnostics){
 					printf("  clamps_D: %d %d\n",(int)lower_clamps[i],(int)upper_clamps[i]);
 				}
 			}
@@ -136,7 +136,7 @@ uint16_t* decode_entropy(
 		uint16_t cum2sym[1<<prob_bits];
 		for(size_t s=0; s < symbol_range; s++){
 			for(uint32_t i=cum_freqs[s]; i < cum_freqs[s+1]; i++){
-		   		 cum2sym[i] = s;
+		   		cum2sym[i] = s;
 			}
 		}
 		Rans64State rans;

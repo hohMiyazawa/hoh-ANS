@@ -152,6 +152,7 @@ uint8_t* decode_layer(
 		}
 		delete[] symbols;
 	}
+	printf("layer completed\n");
 	return decoded;
 }
 

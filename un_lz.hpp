@@ -35,6 +35,7 @@ uint16_t* un_lz(
 		}
 		else{
 			printf("pointer %d \n",(int)(*byte_pointer));
+			printf("in_size %d \n",(int)(in_size));
 
 			size_t lz_future_size;
 			uint8_t* lz_future = decode_entropy_8bit(
@@ -105,6 +106,7 @@ uint16_t* un_lz(
 					LEMPEL_BACKREF[index++] = backby;
 				}
 			}
+			printf("GROUP %d\n",(int)group);
 
 			delete[] lz_future;
 			delete[] lz_length;

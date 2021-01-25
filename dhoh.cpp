@@ -148,6 +148,8 @@ uint8_t* decode_tile(
 		height
 	);
 
+	printf("WHAT WHAT WHAT\n");//DEBUG
+
 	if(channel_number_internal == 1){
 		//no need for additional channel information
 		uint8_t* decoded_channel = decode_layer(
