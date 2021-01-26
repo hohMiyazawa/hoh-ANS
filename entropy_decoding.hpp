@@ -33,7 +33,7 @@ void decode_entropy_simple(
 		printf("[SIMPLE]     table_storage_mode : %d\n",(int)table_storage_mode);
 		printf("[SIMPLE]     range              : %d\n",(int)symbol_range);
 		printf("[SIMPLE]     bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
-		printf("[SIMPLE]     symbols            : %d\n",(int)(*symbol_size));
+		printf("[SIMPLE]     symbols            : %d\n\n",(int)(*symbol_size));
 	}
 
 
@@ -117,7 +117,17 @@ void decode_entropy_simple(
 		printf("[SIMPLE] ---rANS size: %d\n",(int)data_size);
 	}
 	else{
-		//only 8bit for now
+		uint8_t slag = 0;
+		uint8_t slag_bits = 0;
+		for(size_t i=0;i<(*symbol_size);i++){
+			unstuffer(
+				in_bytes,
+				byte_pointer,
+				&slag,
+				&slag_bits,
+				maximum_bits_per_symbol
+			);
+		}
 	}
 }
 
@@ -151,7 +161,7 @@ uint16_t* decode_entropy(
 		printf("table_storage_mode : %d\n",(int)table_storage_mode);
 		printf("range              : %d\n",(int)symbol_range);
 		printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
-		printf("symbols            : %d\n",(int)(*symbol_size));
+		printf("symbols            : %d\n\n",(int)(*symbol_size));
 	}
 
 
@@ -266,9 +276,16 @@ uint16_t* decode_entropy(
 		}
 	}
 	else{
-		//only 8bit for now
-		for(size_t i=0;i<*symbol_size;i++){
-			decoded[i] = (uint16_t)in_bytes[(*byte_pointer)++];
+		uint8_t slag = 0;
+		uint8_t slag_bits = 0;
+		for(size_t i=0;i<(*symbol_size);i++){
+			decoded[i] = (uint16_t)unstuffer(
+				in_bytes,
+				byte_pointer,
+				&slag,
+				&slag_bits,
+				maximum_bits_per_symbol
+			);
 		}
 	}
 	return decoded;

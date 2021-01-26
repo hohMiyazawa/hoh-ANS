@@ -273,9 +273,9 @@ size_t encode_entropy(
 		printf("range              : %d\n",(int)range);
 		printf("bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
 		printf("symbols            : %d\n",(int)symbol_size);
+		printf("entropy size       : %d\n\n",(int)entropy_size);
 	}
 	
-	//printf("entropy: %d\n",(int)entropy_size);
 	return entropy_size;
 }
 
