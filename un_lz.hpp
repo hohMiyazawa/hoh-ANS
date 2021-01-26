@@ -3,6 +3,68 @@
 
 #include "entropy_decoding.hpp"
 
+void un_lz_simple(
+	uint8_t* in_bytes,
+	size_t in_size,
+	size_t* byte_pointer,
+	size_t width,
+	size_t height
+){
+	uint8_t lz_type = in_bytes[(*byte_pointer)++];
+	uint8_t use_lempel   = (lz_type & 0b00000001);
+	uint8_t backref_size = (lz_type & 0b00000010)>>1;
+	uint8_t joined       = (lz_type & 0b00000100)>>2;
+	if(use_lempel == 0){
+		printf("[SIMPLE] no un_lz to do\n");
+	}
+	if(backref_size == 0){//1byte backrefs, not implemented yet
+		printf("[SIMPLE] unimplemented un_lz\n");
+	}
+	else{
+		printf("[SIMPLE] standard un_lz\n");
+		if(joined){//not implemented
+			printf("[SIMPLE] unimplemented un_lz\n");
+		}
+		else{
+			size_t lz_future_size;
+			decode_entropy_simple(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&lz_future_size,
+				1
+			);
+
+			size_t lz_length_size;
+			decode_entropy_simple(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&lz_length_size,
+				1
+			);
+
+			size_t lz_backby_size;
+			decode_entropy_simple(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&lz_backby_size,
+				1
+			);
+
+			size_t lz_backby2_size;
+			decode_entropy_simple(
+				in_bytes,
+				in_size,
+				byte_pointer,
+				&lz_backby2_size,
+				1
+			);
+		}
+	}
+}
+
 uint16_t* un_lz(
 	uint8_t* in_bytes,
 	size_t in_size,

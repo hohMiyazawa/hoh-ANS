@@ -5,6 +5,122 @@
 #include "varint.hpp"
 #include "stattools.hpp"
 
+void decode_entropy_simple(
+	uint8_t* in_bytes,
+	size_t in_size,
+	size_t* byte_pointer,
+	size_t* symbol_size,
+	uint8_t diagnostics
+){
+	size_t start_value = (*byte_pointer);
+
+	size_t symbol_range = read_varint(in_bytes, byte_pointer)+1;
+	*symbol_size = read_varint(in_bytes, byte_pointer);
+
+	uint8_t maximum_bits_per_symbol = 0;
+	for(size_t check = (symbol_range - 1);check;check = (check>>1)){
+		maximum_bits_per_symbol++;
+	}
+
+	uint8_t metadata = in_bytes[(*byte_pointer)++];
+	uint8_t entropy_mode = metadata>>7;
+	uint8_t prob_bits = (metadata & 0b00111100)>>2;
+	uint8_t table_storage_mode = (metadata & 0b00000011);
+
+	if(diagnostics){
+		printf("[SIMPLE]     entropy_mode       : %d\n",(int)entropy_mode);
+		printf("[SIMPLE]     prob_bits          : %d\n",(int)prob_bits);
+		printf("[SIMPLE]     table_storage_mode : %d\n",(int)table_storage_mode);
+		printf("[SIMPLE]     range              : %d\n",(int)symbol_range);
+		printf("[SIMPLE]     bits per symbol    : %d\n",(int)maximum_bits_per_symbol);
+		printf("[SIMPLE]     symbols            : %d\n",(int)(*symbol_size));
+	}
+
+
+	if(entropy_mode){
+		uint32_t freqs[symbol_range];
+		uint32_t cum_freqs[symbol_range + 1];
+
+		uint8_t slag = 0;
+		uint8_t slag_bits = 0;
+		if(table_storage_mode == 0){
+		}
+		else if(table_storage_mode == 1){
+			//raw values for freqs
+			for(size_t i=0;i<symbol_range;i++){
+				freqs[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
+			}
+		}
+		else if(table_storage_mode == 2){
+			int clamp_number = ((prob_bits - 1)/4 + 2);
+			uint32_t lower_clamps[clamp_number];
+			uint32_t upper_clamps[clamp_number];
+			for(int i=0;i<clamp_number;i++){
+				lower_clamps[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
+				upper_clamps[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					maximum_bits_per_symbol
+				);
+			}
+			for(size_t i=0;i<symbol_range;i++){
+				uint8_t symbol_bits = 0;
+				if(lower_clamps[0] <= i && upper_clamps[0] >= i){
+					symbol_bits = 1;
+				}
+				if(lower_clamps[1] <= i && upper_clamps[1] >= i){
+					symbol_bits = 4;
+				}
+				for(int j=2;j<clamp_number;j++){
+					if(lower_clamps[j] <= i && upper_clamps[j] >= i){
+						symbol_bits = 4*j;
+					}
+				}
+				if(symbol_bits > prob_bits){
+					symbol_bits = prob_bits;
+				}
+				freqs[i] = unstuffer(
+					in_bytes,
+					byte_pointer,
+					&slag,
+					&slag_bits,
+					symbol_bits
+				);
+			}
+		}
+		else if(table_storage_mode == 3){
+			printf("[SIMPLE] unimplemented frequency table storage mode!\n");
+		}
+		else{
+			printf("[SIMPLE] unknown frequency table storage mode!\n");
+		}
+		if(diagnostics){
+			printf("[SIMPLE] entropy_size %d\n",(int)((*byte_pointer) - start_value));
+		}
+		Rans64DecSymbol dsyms[symbol_range];
+
+		size_t data_size = read_varint(in_bytes, byte_pointer);
+		printf("[SIMPLE] ---rANS size: %d\n",(int)data_size);
+	}
+	else{
+		//only 8bit for now
+	}
+}
+
 uint16_t* decode_entropy(
 	uint8_t* in_bytes,
 	size_t in_size,

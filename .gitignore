@@ -3,3 +3,4 @@ dhoh
 simple_entropy_encoder
 simple_entropy_decoder
 layer_roundtrip
+simple_parser
