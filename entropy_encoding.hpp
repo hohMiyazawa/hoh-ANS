@@ -42,7 +42,7 @@ size_t encode_entropy(
 //encode table here
 	write_varint(output_bytes, &entropy_size, range-1);
 	write_varint(output_bytes, &entropy_size, symbol_size);
-	size_t expected_stored_size = entropy_size + 1 + (maximum_bits_per_symbol*symbol_size + 8 - 1)/8;
+	size_t expected_stored_size = entropy_size/*header already written*/ + 1/*to store or not to store*/ + (maximum_bits_per_symbol*symbol_size + 8 - 1)/8/*the data*/;
 
 	size_t expected_raw_size = (prob_bits*range + 8 - 1)/8;
 	size_t expected_clamped_size = 2*(maximum_bits_per_symbol - 1)*((prob_bits - 1)/4 + 2);
@@ -260,6 +260,9 @@ size_t encode_entropy(
 				symbols[i],
 				maximum_bits_per_symbol
 			);
+		}
+		if(bits_remaining != 8){
+			output_bytes[entropy_size++] = current_byte;
 		}
 	}
 

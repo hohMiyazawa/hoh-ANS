@@ -85,6 +85,5 @@ varint, symbol number
 	1: raw values for freqs
 	2: [pairs of clamps up to relevant size, for bits 0,1 and every 4n]
 	3: 1 byte laplace deviation
-[table data]
-varint, rANS data length
-[rANS data]
+(if rANS) varint, data length
+[table data] or [rANS data]
