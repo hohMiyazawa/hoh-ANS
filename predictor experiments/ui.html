@@ -24,7 +24,6 @@ body{
 }
 		</style>
 		<script src="colourspace.js"></script>
-		<script src="predictors.js"></script>
 	</head>
 	<body>
 		<div class="canvasContainer">
@@ -117,7 +116,7 @@ function drawCost(imageData,width,height){
 	ctx.putImageData(image,0,0);
 }
 
-const grid = 16;
+const grid = 20;
 
 let green_channel;
 
@@ -152,7 +151,7 @@ let predictors = [
 	}
 ]
 
-let predict = function(parsnips,doNotDraw){
+let predict = function(parsnips,doDraw){
 	let previous_row = new Array(green_channel[0].length + 1).fill(128);
 	let previous_row_best = new Array(green_channel[0].length).fill(0);
 	let previous_TL = 128;
@@ -160,6 +159,8 @@ let predict = function(parsnips,doNotDraw){
 	let misses = [];
 	let freqs = new Array(512).fill(0);
 	for(let j=0;j<green_channel.length;j++){
+		previous_TL = 128;
+		previous = 128;
 		for(let i=0;i<green_channel[0].length;i++){
 			let L = previous;
 			let TL = previous_TL;
@@ -175,14 +176,8 @@ let predict = function(parsnips,doNotDraw){
 
 			misses.push(val);
 			freqs[val]++;
-			if(i == 0){
-				previous_TL = 128;
-				previous_row[green_channel[0].length-1] = previous;
-			}
-			else{
-				previous_TL = previous_row[i-1];
-				previous_row[i-1] = previous;
-			}
+			previous_TL = previous_row[i];
+			previous_row[i] = green_channel[j][i]
 			previous = green_channel[j][i];
 		}
 	};
@@ -200,10 +195,91 @@ let predict = function(parsnips,doNotDraw){
 		costData.push(row);
 	};
 	document.getElementById("estimate").innerText = Math.round(cost_sum/8) + " " + parsnips.join(",");
-	if(doNotDraw){
+	if(doDraw){
 		drawCost(costData,green_channel[0].length,green_channel.length);
 	}
 	return cost_sum;
+}
+
+let full_freqs = function(parsnips){
+	let previous_row = new Array(green_channel[0].length + 1).fill(128);
+	let previous_TL = 128;
+	let previous = 128;
+	let freqs = new Array(512).fill(0);
+	for(let j=0;j<green_channel.length;j++){
+		previous_TL = 128;
+		previous = 128;
+		for(let i=0;i<green_channel[0].length;i++){
+			let L = previous;
+			let TL = previous_TL;
+			let T = previous_row[i];
+			let TR = previous_row[i+1];
+
+			let widthIndex = Math.floor(grid*i/green_channel[0].length);
+			let heightIndex = Math.floor(grid*j/green_channel.length);
+			let predictorIndex = parsnips[heightIndex*grid + widthIndex];
+
+			let val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256;
+
+			freqs[val]++;
+			previous_TL = previous_row[i];
+			previous_row[i] = green_channel[j][i]
+			previous = green_channel[j][i];
+		}
+	};
+	return freqs
+	//return freqs.map(val => -Math.log2(val/(green_channel.length*green_channel[0].length)))
+}
+
+let filter_patch = function(x,y,ww,hh,filter){
+	let previous_row = new Array(green_channel[0].length + 1).fill(128);
+	let previous_TL = 128;
+	let previous = 128;
+	let misses = [];
+	if(y){
+		if(x){
+			previous = green_channel[y][x - 1]
+		}
+		for(let i=0;i<green_channel[0].length;i++){
+			previous_row[i] = green_channel[y - 1][i]
+		}
+	}
+	else if(x){
+		previous = green_channel[0][x - 1]
+	}
+	for(let j=y;j<green_channel.length && j < (y + hh);j++){
+		if(x){
+			if(j){
+				previous_TL = green_channel[j - 1][x - 1];
+			}
+			else{
+				previous_TL = 128;
+			}
+			previous = green_channel[j][x - 1];
+		}
+		else{
+			previous_TL = 128;
+			previous = 128;
+		}
+		if(j){
+			previous_row[x + ww] = green_channel[j - 1][x + ww]
+		}
+		for(let i=x;i<green_channel[0].length && i < (x + ww);i++){
+			let L = previous;
+			let TL = previous_TL;
+			let T = previous_row[i];
+			let TR = previous_row[i+1];
+
+			let val = green_channel[j][i] - predictors[filter].predict(L,TL,T,TR) + 256;
+
+
+			misses.push(val);
+			previous_TL = previous_row[i];
+			previous_row[i] = green_channel[j][i]
+			previous = green_channel[j][i];
+		}
+	}
+	return misses
 }
 
 let parcels = new Array(grid*grid).fill(0);
@@ -227,15 +303,58 @@ for(let i=0;i<grid;i++){
 		let position = i*grid + j;
 		para.oninput = function(){
 			parcels[position] = parseInt(para.value);
-			predict(parcels);
+			predict(parcels,true);
 		}
 	}
 }
 
 function tune(){
 	let filt = new Array(grid*grid).fill(3);
+
+	let tileWidth = Math.ceil(green_channel[0].length/grid);
+	let tileHeight = Math.ceil(green_channel.length/grid);
+
+	for(let iteration = 0;iteration < 6;iteration++){
+
+		let def_freq = full_freqs(filt);
+		let insidental = def_freq.filter(val => val).reduce((acc,val) => acc + -val * Math.log2(val/(green_channel.length*green_channel[0].length)),0)
+		//console.log(insidental);
+		for(let i=0;i<grid*grid;i++){
+
+			let def_filter = new Array(512).fill(0);
+			filter_patch(
+				tileWidth * (i % grid),
+				tileHeight * Math.floor(i / grid),
+				tileWidth,
+				tileHeight,
+				filt[i]
+			).forEach(val => def_filter[val]++);
+			let cost = insidental;
+			
+			for(let j=0;j<predictors.length;j++){
+				if(j === filt[i]){
+					continue
+				}
+				let filteredVals = new Array(512).fill(0);
+				filter_patch(tileWidth * (i % grid),tileHeight * Math.floor(i / grid),tileWidth,tileHeight,j).forEach(val => filteredVals[val]++);
+				let unified = def_freq.map((val,index) => val - def_filter[index] + filteredVals[index]);
+				let pred_cost = unified.filter(val => val).reduce((acc,val) => acc + -val * Math.log2(val/(green_channel.length*green_channel[0].length)),0);
+				if(pred_cost < cost){
+					cost = pred_cost;
+					filt[i] = j
+				}
+			}
+		}
+	}
+	let cost = predict(filt,true);
+	//console.log(cost/origCost);
+/*
 	let cost = predict(filt,true);
 	let origCost = cost;
+
+	let tileWidth = Math.ceil(green_channel[0].length/grid);
+	let tileHeight = Math.ceil(green_channel.length/grid)
+
 	for(let i=0;i<grid*grid;i++){
 		for(let j=0;j<4;j++){
 			let localcopy = filt.map(a => a);
@@ -249,6 +368,7 @@ function tune(){
 	}
 	predict(filt,false);
 	console.log(cost/origCost);
+*/
 }
 
 

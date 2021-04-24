@@ -249,18 +249,13 @@ function serialize(channels){
 }
 
 function getPatch(imageData,ww,hh,x,y,width,height){
-	if(x >= ww || y >= hh || x + width > ww || y + height > hh){
+	if(x >= ww || y >= hh){
 		console.log(ww,hh,x,y,width,height);
 		throw "bad patch dimensions"
 	}
-	if(x === 0 && y === 0 && ww === width && hh === height){
-		return imageData
-	}
-	let channels = imageData.length/(ww*hh);
 	let patch = [];
-	for(let i=0;i<height;i++){
-		let offset = ((y+i) * ww + x)*channels;
-		patch = patch.concat(imageData.slice(offset,offset + width*channels))
+	for(let i=0;i<height && (y + i) < hh;i++){
+		patch.push(imageData[y + i].slice(x,x + width))
 	}
 	return patch
 }
