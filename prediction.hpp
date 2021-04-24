@@ -123,7 +123,7 @@ uint16_t* channelpredict_section(
 				midpoint(L,TL),
 				midpoint(TL,T),
 				midpoint(T,TR),
-				paeth(L,TL,T),
+				paeth(L,T,TL),
 				average3(L,L,TL),
 				average3(L,TL,TL),
 				average3(TL,TL,T),

@@ -74,15 +74,15 @@ uint8_t paeth(uint8_t A,uint8_t B,uint8_t C){
 	int Cp = std::abs(C - p);
 	if(Ap < Bp){
 		if(Ap < Cp){
-			return (uint8_t)Ap;
+			return (uint8_t)A;
 		}
-		return (uint8_t)Cp;
+		return (uint8_t)C;
 	}
 	else{
 		if(Bp < Cp){
-			return (uint8_t)Bp;
+			return (uint8_t)B;
 		}
-		return (uint8_t)Cp;
+		return (uint8_t)C;
 	}
 }
 
@@ -93,15 +93,15 @@ uint16_t paeth(uint16_t A,uint16_t B,uint16_t C){
 	int Cp = std::abs(C - p);
 	if(Ap < Bp){
 		if(Ap < Cp){
-			return (uint16_t)Ap;
+			return (uint16_t)A;
 		}
-		return (uint16_t)Cp;
+		return (uint16_t)C;
 	}
 	else{
 		if(Bp < Cp){
-			return (uint16_t)Bp;
+			return (uint16_t)B;
 		}
-		return (uint16_t)Cp;
+		return (uint16_t)C;
 	}
 }
 
