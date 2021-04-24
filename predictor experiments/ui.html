@@ -116,11 +116,15 @@ function drawCost(imageData,width,height){
 	ctx.putImageData(image,0,0);
 }
 
-const grid = 20;
+const grid = 16;
 
 let green_channel;
 
 let predictors = [
+	{
+		name: "FFV1",
+		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
+	},
 	{
 		name: "left",
 		predict: function(L,TL,T,TR){return L}
@@ -129,25 +133,74 @@ let predictors = [
 		name: "top",
 		predict: function(L,TL,T,TR){return T}
 	},
-	/*{
+	{
 		name: "top-left",
 		predict: function(L,TL,T,TR){return TL}
 	},
 	{
 		name: "top-right",
 		predict: function(L,TL,T,TR){return TR}
-	},*/
+	},
 	{
 		name: "avg L-T",
 		predict: function(L,TL,T,TR){return Math.floor((T + L)/2)}
 	},
-	/*{
+	{
 		name: "avg L-TL",
 		predict: function(L,TL,T,TR){return Math.floor((L + TL)/2)}
-	},*/
+	},
 	{
-		name: "FFV1",
-		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
+		name: "avg TL-T",
+		predict: function(L,TL,T,TR){return Math.floor((T + TL)/2)}
+	},
+	{
+		name: "avg T-TR",
+		predict: function(L,TL,T,TR){return Math.floor((T + TR)/2)}
+	},
+	{
+		name: "avg3 L-L-TL",
+		predict: function(L,TL,T,TR){return Math.floor((L + L + TL)/3)}
+	},
+	{
+		name: "avg3 L-TL-TL",
+		predict: function(L,TL,T,TR){return Math.floor((L + TL + TL)/3)}
+	},
+	{
+		name: "avg3 TL-TL-T",
+		predict: function(L,TL,T,TR){return Math.floor((TL + TL + T)/3)}
+	},
+	{
+		name: "avg3 TL-T-T",
+		predict: function(L,TL,T,TR){return Math.floor((TL + T + T)/3)}
+	},
+	{
+		name: "avg3 T-T-TR",
+		predict: function(L,TL,T,TR){return Math.floor((T + T + TR)/3)}
+	},
+	{
+		name: "avg3 T-TR-TR",
+		predict: function(L,TL,T,TR){return Math.floor((T + TR + TR)/3)}
+	},
+	{
+		name: "paeth",
+		predict: function(L,TL,T,TR){
+			let p = T + L - TL;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			let TLp = Math.abs(TL - p);
+			if(Tp < Lp){
+				if(Tp < TLp){
+					return T;
+				}
+				return TL;
+			}
+			else{
+				if(Lp < TLp){
+					return L;
+				}
+				return TL;
+			}
+		}
 	}
 ]
 
@@ -194,7 +247,11 @@ let predict = function(parsnips,doDraw){
 		}
 		costData.push(row);
 	};
-	document.getElementById("estimate").innerText = Math.round(cost_sum/8) + " " + parsnips.join(",");
+	let mopi = new Array(predictors.length).fill(0);
+	parsnips.forEach(val => {
+		mopi[val]++
+	});
+	document.getElementById("estimate").innerText = Math.round(cost_sum/8) + " " + parsnips.join(",") + "\n" + mopi.map((val,index) => predictors[index].name + " : " + val).join("\n");
 	if(doDraw){
 		drawCost(costData,green_channel[0].length,green_channel.length);
 	}
@@ -309,16 +366,18 @@ for(let i=0;i<grid;i++){
 }
 
 function tune(){
-	let filt = new Array(grid*grid).fill(3);
+	let filt = new Array(grid*grid).fill(0);
 
 	let tileWidth = Math.ceil(green_channel[0].length/grid);
 	let tileHeight = Math.ceil(green_channel.length/grid);
 
-	for(let iteration = 0;iteration < 6;iteration++){
+	for(let iteration = 0;iteration < 10;iteration++){
 
 		let def_freq = full_freqs(filt);
 		let insidental = def_freq.filter(val => val).reduce((acc,val) => acc + -val * Math.log2(val/(green_channel.length*green_channel[0].length)),0)
-		//console.log(insidental);
+
+		let old_filt = filt.map(a => a);
+
 		for(let i=0;i<grid*grid;i++){
 
 			let def_filter = new Array(512).fill(0);
@@ -344,6 +403,13 @@ function tune(){
 					filt[i] = j
 				}
 			}
+		}
+
+		def_freq = full_freqs(filt);
+		let insidental2 = def_freq.filter(val => val).reduce((acc,val) => acc + -val * Math.log2(val/(green_channel.length*green_channel[0].length)),0);
+		if(insidental2 >= insidental){
+			filt = old_filt;
+			break;
 		}
 	}
 	let cost = predict(filt,true);
