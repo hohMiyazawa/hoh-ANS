@@ -116,7 +116,7 @@ function drawCost(imageData,width,height){
 	ctx.putImageData(image,0,0);
 }
 
-const grid = 16;
+let grid = 12;
 
 let green_channel;
 
@@ -181,6 +181,12 @@ let predictors = [
 		name: "avg3 T-TR-TR",
 		predict: function(L,TL,T,TR){return Math.floor((T + TR + TR)/3)}
 	},
+/*
+	{
+		name: "avg4",
+		predict: function(L,TL,T,TR){return Math.floor((L + TL + T + TR)/4)}
+	},
+*/
 	{
 		name: "paeth",
 		predict: function(L,TL,T,TR){
@@ -201,39 +207,97 @@ let predictors = [
 				return TL;
 			}
 		}
+	},
+	{
+		name: "weird",
+		predict: function(L,TL,T,TR){return Math.floor((L + TR + 2*T)/4)}
+	},
+	{
+		name: "CAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(T + L - TL,0),255)}
+	},
+	{
+		name: "CAH",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.floor((L+T)/2 + ((L+T)/2 - TL)/2),0),255)}
 	}
 ]
 
 let predict = function(parsnips,doDraw){
-	let previous_row = new Array(green_channel[0].length + 1).fill(128);
-	let previous_row_best = new Array(green_channel[0].length).fill(0);
+	let previous_row = new Array(green_channel[0].length + 1).fill(0);
 	let previous_TL = 128;
 	let previous = 128;
 	let misses = [];
 	let freqs = new Array(512).fill(0);
-	for(let j=0;j<green_channel.length;j++){
-		previous_TL = 128;
-		previous = 128;
-		for(let i=0;i<green_channel[0].length;i++){
-			let L = previous;
-			let TL = previous_TL;
-			let T = previous_row[i];
-			let TR = previous_row[i+1];
+	if(parsnips.some(pred => pred === "mix")){
+		let previousMix = [];
+		let previous_row_mix = new Array(green_channel[0].length).fill(0);
+		previous_row_mix = previous_row_mix.map(_ => new Array(predictors.length).fill(1));
+		for(let j=0;j<green_channel.length;j++){
+			previous_TL = 128;
+			previous = 128;
+			previousMix = new Array(predictors.length).fill(1);
+			for(let i=0;i<green_channel[0].length;i++){
+				let L = previous;
+				let TL = previous_TL;
+				let T = previous_row[i];
+				let TR = previous_row[i+1];
 
-			let widthIndex = Math.floor(grid*i/green_channel[0].length);
-			let heightIndex = Math.floor(grid*j/green_channel.length);
-			let predictorIndex = parsnips[heightIndex*grid + widthIndex];
+				let widthIndex = Math.floor(grid*i/green_channel[0].length);
+				let heightIndex = Math.floor(grid*j/green_channel.length);
+				let predictorIndex = parsnips[heightIndex*grid + widthIndex];
+				let val;
+				let weightSum = 0;
+				let predSum = 0;
+				if(predictorIndex === "mix"){
+					predictors.forEach((predictor,pIndex) => {
+						let entryWeight = previousMix[pIndex] * previous_row_mix[i][pIndex];
+						weightSum += entryWeight;
+						let ppp = predictors[pIndex].predict(L,TL,T,TR);
+						predSum += entryWeight * ppp;
+						previousMix[pIndex] = 1/(1 + Math.pow(Math.abs(green_channel[j][i] - ppp),2));
+						previous_row_mix[i][pIndex] = 1/(1 + Math.pow(Math.abs(green_channel[j][i] - ppp),2))
+					});
+					val = green_channel[j][i] - Math.round(predSum/weightSum) + 256
+				}
+				else{
+					val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256
+				}
 
-			let val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256;
 
-
-			misses.push(val);
-			freqs[val]++;
-			previous_TL = previous_row[i];
-			previous_row[i] = green_channel[j][i]
-			previous = green_channel[j][i];
+				misses.push(val);
+				freqs[val]++;
+				previous_TL = previous_row[i];
+				previous_row[i] = green_channel[j][i]
+				previous = green_channel[j][i];
+			}
 		}
-	};
+	}
+	else{
+		for(let j=0;j<green_channel.length;j++){
+			previous_TL = 128;
+			previous = 128;
+			for(let i=0;i<green_channel[0].length;i++){
+				let L = previous;
+				let TL = previous_TL;
+				let T = previous_row[i];
+				let TR = previous_row[i+1];
+
+				let widthIndex = Math.floor(grid*i/green_channel[0].length);
+				let heightIndex = Math.floor(grid*j/green_channel.length);
+				let predictorIndex = parsnips[heightIndex*grid + widthIndex];
+
+				let val = green_channel[j][i] - predictors[predictorIndex].predict(L,TL,T,TR) + 256;
+
+
+				misses.push(val);
+				freqs[val]++;
+				previous_TL = previous_row[i];
+				previous_row[i] = green_channel[j][i]
+				previous = green_channel[j][i];
+			}
+		}
+	}
+	console.log(freqs);
 	let entropy = freqs.map(val => -Math.log2(val/(green_channel.length*green_channel[0].length)));
 
 	let costData = [];
@@ -251,7 +315,15 @@ let predict = function(parsnips,doDraw){
 	parsnips.forEach(val => {
 		mopi[val]++
 	});
-	document.getElementById("estimate").innerText = Math.round(cost_sum/8) + " " + parsnips.join(",") + "\n" + mopi.map((val,index) => predictors[index].name + " : " + val).join("\n");
+	let predMap = [];
+	for(let i=0;i<grid;i++){
+		predMap.push(parsnips.slice(i*grid,i*grid + grid).map(ele => ("0" + ele).slice(-2)).join(","))
+	}
+	document.getElementById("estimate").innerText =
+		Math.round(cost_sum/8) + "\n"
+		+ predMap.join("\n") + "\n"
+		+ mopi.map((val,index) => predictors[index].name + " : " + val).join("\n") + "\n"
+		+ Math.ceil(3 + (mopi.filter(val => val).reduce((acc,val) => acc - val*Math.log2(val/parsnips.length),0))/8);
 	if(doDraw){
 		drawCost(costData,green_channel[0].length,green_channel.length);
 	}
@@ -366,6 +438,7 @@ for(let i=0;i<grid;i++){
 }
 
 function tune(){
+	grid = parseInt(prompt("grid:"));
 	let filt = new Array(grid*grid).fill(0);
 
 	let tileWidth = Math.ceil(green_channel[0].length/grid);
