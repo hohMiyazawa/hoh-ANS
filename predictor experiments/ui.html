@@ -129,22 +129,29 @@ let predictors = [
 		name: "left",
 		predict: function(L,TL,T,TR){return L}
 	},
+/*
 	{
 		name: "top",
 		predict: function(L,TL,T,TR){return T}
 	},
+*/
+/*
 	{
 		name: "top-left",
 		predict: function(L,TL,T,TR){return TL}
 	},
+*/
 	{
 		name: "top-right",
 		predict: function(L,TL,T,TR){return TR}
 	},
+/*
 	{
 		name: "avg L-T",
 		predict: function(L,TL,T,TR){return Math.floor((T + L)/2)}
 	},
+*/
+/*
 	{
 		name: "avg L-TL",
 		predict: function(L,TL,T,TR){return Math.floor((L + TL)/2)}
@@ -157,6 +164,8 @@ let predictors = [
 		name: "avg T-TR",
 		predict: function(L,TL,T,TR){return Math.floor((T + TR)/2)}
 	},
+*/
+/*
 	{
 		name: "avg3 L-L-TL",
 		predict: function(L,TL,T,TR){return Math.floor((L + L + TL)/3)}
@@ -173,20 +182,26 @@ let predictors = [
 		name: "avg3 TL-T-T",
 		predict: function(L,TL,T,TR){return Math.floor((TL + T + T)/3)}
 	},
+*/
+/*
 	{
 		name: "avg3 T-T-TR",
 		predict: function(L,TL,T,TR){return Math.floor((T + T + TR)/3)}
 	},
+*/
+/*
 	{
 		name: "avg3 T-TR-TR",
 		predict: function(L,TL,T,TR){return Math.floor((T + TR + TR)/3)}
 	},
+*/
 /*
 	{
 		name: "avg4",
 		predict: function(L,TL,T,TR){return Math.floor((L + TL + T + TR)/4)}
 	},
 */
+/*
 	{
 		name: "paeth",
 		predict: function(L,TL,T,TR){
@@ -208,14 +223,17 @@ let predictors = [
 			}
 		}
 	},
+*/
 	{
 		name: "weird",
 		predict: function(L,TL,T,TR){return Math.floor((L + TR + 2*T)/4)}
 	},
+/*
 	{
 		name: "CAF",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(T + L - TL,0),255)}
 	},
+*/
 	{
 		name: "CAH",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.floor((L+T)/2 + ((L+T)/2 - TL)/2),0),255)}
