@@ -471,6 +471,106 @@ function tune(contexts){
 		console.log("predictors",predictorCounts)
 	}
 	else{
+		let heatMap = coded.map(misses => local_estimateEntropy_exclusive(global_table,misses));
+		let medianSplitter = Stats.median(heatMap);
+		let groups = [[],[]];
+		coded.forEach((cell,index) => {
+			if(heatMap[index] < medianSplitter){
+				groups[0].push(cell)
+			}
+			else{
+				groups[1].push(cell)
+			}
+		});
+		let entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+		console.log((entropy)/8,"secondary",groups.map(val => val.length));
+		console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)))/8,"implied overhead + " + groups.length + " frequency tables");
+
+		let frequencies = groups.map(group => freqs(group.flat()));
+
+		let coded2;
+		let predictorCounts;
+
+		let iterations = 0;
+		while(groups.length < contexts){
+			if(iterations - contexts > 5){
+				break
+			}
+			iterations++;
+			let new_tiles = [];
+			tile_predictors.forEach((tile,index) => {
+				let predictor_results = groups.map((group,gIndex) =>
+					predictors.map((predictor,pIndex) => 
+						local_estimateEntropy_inclusive(
+							frequencies[gIndex],
+							predictBlock(pIndex,index)
+						)
+					)
+				);
+				let bests = predictor_results.map(result => Math.min(...result));
+				let best_best = Math.min(...bests);
+				let best_best_index = bests.indexOf(best_best);
+				new_tiles.push(predictor_results[best_best_index].indexOf(best_best))
+			});
+
+			coded2 = new_tiles.map((predictor,index) => predictBlock(predictor,index));
+
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				groups[estimates.indexOf(Math.min(...estimates))].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			let lengths = groups.map(a => a.length);
+
+			let largestIndex = lengths.indexOf(Math.max(...lengths));
+			let largest = groups.splice(largestIndex,1)[0];
+
+			heatMap = largest.map(misses => local_estimateEntropy_exclusive(frequencies[largestIndex],misses));
+			medianSplitter = Stats.median(heatMap);
+			let group_lower = [];
+			let group_upper = [];
+			largest.forEach((cell,index) => {
+				if(heatMap[index] < medianSplitter){
+					group_lower.push(cell)
+				}
+				else{
+					group_upper.push(cell)
+				}
+			});
+
+			if(group_lower.length){
+				groups.push(group_lower)
+			}
+			if(group_upper.length){
+				groups.push(group_upper)
+			}
+			frequencies = groups.map(group => freqs(group.flat()));
+
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			tile_predictors = new_tiles;
+			predictorCounts = new Array(predictors.length).fill(0);
+			tile_predictors.forEach(predictor => {
+				predictorCounts[predictor]++
+			})
+			console.log(entropy/8,"secondary with search",groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
+		for(let i=0;i<5;i++){
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				groups[estimates.indexOf(Math.min(...estimates))].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			console.log(entropy/8,"secondary, adjustment" + 1,groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
 	}
 }
 
