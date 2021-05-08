@@ -144,6 +144,10 @@ let predictors = [
 		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
 	},
 	{
+		name: "NULL",
+		predict: function(L,TL,T,TR){return 0}
+	},
+	{
 		name: "left",
 		predict: function(L,TL,T,TR){return L}
 	},
@@ -158,6 +162,10 @@ let predictors = [
 	{
 		name: "top-right",
 		predict: function(L,TL,T,TR){return TR}
+	},
+	{
+		name: "median",
+		predict: function(L,TL,T,TR){return [T,L,TL].sort((a,b) => a - b)[1]}
 	},
 	{
 		name: "avg L-T",
@@ -204,6 +212,10 @@ let predictors = [
 		predict: function(L,TL,T,TR){return Math.floor((L + TL + T + TR)/4)}
 	},
 	{
+		name: "avg4 L-TL-TL-T",
+		predict: function(L,TL,T,TR){return Math.floor((L + TL + TL + T)/4)}
+	},
+	{
 		name: "paeth",
 		predict: function(L,TL,T,TR){
 			let p = T + L - TL;
@@ -225,6 +237,20 @@ let predictors = [
 		}
 	},
 	{
+		name: "semi-paeth",
+		predict: function(L,TL,T,TR){
+			let p = T + L - TL;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
 		name: "weird",
 		predict: function(L,TL,T,TR){return Math.floor((L + TR + 2*T)/4)}
 	},
@@ -235,6 +261,30 @@ let predictors = [
 	{
 		name: "CAH",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.floor((L+T)/2 + ((L+T)/2 - TL)/2),0),255)}
+	},
+	{
+		name: "SCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 3*L - 2*TL)/4),0),255)}
+	},
+	{
+		name: "SSCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((5*T + 5*L - 2*TL)/8),0),255)}
+	},
+	{
+		name: "TCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL)/2),0),255)}
+	},
+	{
+		name: "LCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL)/2),0),255)}
+	},
+	{
+		name: "TTCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL)/4),0),255)}
+	},
+	{
+		name: "LLCAF",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL)/4),0),255)}
 	}
 ]
 
@@ -258,6 +308,11 @@ const Stats = {
 			).length
 		)[0];
 	}
+}
+
+function laplace(para){
+	let freqs = new Array(256).fill(0);
+	return freqs.map((_,index) => Math.pow(2,-Math.min(index,256 - index)/para))
 }
 
 function freqs(list){
@@ -290,10 +345,130 @@ function local_estimateEntropy_exclusive(freqs,local_symbols){//be aware of null
 	let total = freqs.reduce((acc,val) => acc + val,0);
 	return local_symbols.reduce((acc,val) => acc - Math.log2(freqs[val]/total),0)
 }
+function estimate_table_size(freqs){//bytes
+	let largest = Math.max(...freqs);
+	let bits = Math.ceil(Math.log2(largest));
+	let best = Math.ceil(bits*freqs.length/8) + 1;
+	for(let lower=bits-1;bits - lower <=8;lower--){
+		let within = freqs.filter(a => a <= Math.pow(2,lower) - 1).length;
+		let maybe_better = Math.ceil((lower*within + bits*(freqs.length - within))/8) + 3;
+		if(maybe_better < best){
+			best = maybe_better
+		}
+	}
+	return best
+}
+function codeFromValue(value){
+	if(value <= 4){
+		return [value - 1,0]
+	}
+	if(value <= 6){
+		return [4,1]
+	}
+	if(value <= 8){
+		return [5,1]
+	}
+	if(value <= 12){
+		return [6,2]
+	}
+	if(value <= 16){
+		return [7,2]
+	}
+	if(value <= 24){
+		return [8,3]
+	}
+	if(value <= 32){
+		return [9,3]
+	}
+	if(value <= 48){
+		return [10,4]
+	}
+	if(value <= 64){
+		return [11,4]
+	}
+	if(value <= 96){
+		return [12,5]
+	}
+	if(value <= 128){
+		return [13,5]
+	}
+	if(value <= 192){
+		return [14,6]
+	}
+	if(value <= 256){
+		return [15,6]
+	}
+	if(value <= 384){
+		return [16,7]
+	}
+	if(value <= 512){
+		return [17,7]
+	}
+	if(value <= 768){
+		return [18,8]
+	}
+	if(value <= 1024){
+		return [19,8]
+	}
+	if(value <= 1536){
+		return [20,9]
+	}
+	if(value <= 2048){
+		return [21,9]
+	}
+	if(value <= 3072){
+		return [22,10]
+	}
+	if(value <= 4096){
+		return [23,10]
+	}
+	if(value <= 4096 + 2048){
+		return [24,11]
+	}
+	if(value <= 8192){
+		return [25,11]
+	}
+	if(value <= 8192 * 1.5){
+		return [26,12]
+	}
+	if(value <= 8192 * 2){
+		return [27,12]
+	}
+	if(value <= 8192 * 3){
+		return [28,13]
+	}
+	if(value <= 8192 * 4){
+		return [29,13]
+	}
+	if(value <= 8192 * 6){
+		return [30,14]
+	}
+	if(value <= 8192 * 8){
+		return [31,14]
+	}
+	if(value <= 8192 * 12){
+		return [32,15]
+	}
+	if(value <= 8192 * 16){
+		return [33,15]
+	}
+	if(value <= 8192 * 24){
+		return [34,16]
+	}
+	if(value <= 8192 * 32){
+		return [35,16]
+	}
+}
+function estimateEntropy_prefixcode(list){
+	let pairs = list.map(val => codeFromValue(val));
+	return estimateEntropy(pairs.map(pair => pair[0])) + pairs.map(pair => pair[1]).reduce((acc,val) => acc + val,0)
+}
 
 const BOUND = 8;
 
-function tune(contexts){
+let global_coded;
+
+function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 	let image_width = green_channel[0].length;
 	let image_height = green_channel.length;
 	let tile_width = Math.ceil(image_width/BOUND);
@@ -357,13 +532,279 @@ function tune(contexts){
 		}
 		return collected
 	}
+	let predictBlockMix = function(tile_index){
+		if(//dissallow bordre blocks to simplify tests
+			Math.floor(tile_index / tile_width) * BOUND < 2
+			|| (tile_index % tile_width) * BOUND < 2
+			|| Math.floor(tile_index / tile_width) * BOUND + (BOUND + 2) >= image_height
+			|| (tile_index % tile_width) * BOUND + (BOUND + 2) >= image_width
+		){
+			return predictBlock(0,tile_index)
+		}
+		let collected = [];
+		for(let y=0;y<BOUND;y++){
+			let pixel_y = Math.floor(tile_index / tile_width) * BOUND + y;
+			for(let x=0;x<BOUND;x++){
+				let pixel_x = (tile_index % tile_width) * BOUND + x;
+				let VAL1= green_channel[pixel_y - 1][pixel_x];
+				let L1  = green_channel[pixel_y - 1][pixel_x - 1];
+				let TL1 = green_channel[pixel_y - 2][pixel_x - 1];
+				let T1  = green_channel[pixel_y - 2][pixel_x];
+				let TR1 = green_channel[pixel_y - 2][pixel_x + 1];
+
+				let errors1 = predictors.map(pred => 1/(1 + Math.pow(VAL1 - pred.predict(L1,TL1,T1,TR1),2)));
+
+				let VAL2= green_channel[pixel_y][pixel_x - 1];
+				let L2  = green_channel[pixel_y][pixel_x - 2];
+				let TL2 = green_channel[pixel_y - 1][pixel_x - 2];
+				let T2  = green_channel[pixel_y - 1][pixel_x - 1];
+				let TR2 = green_channel[pixel_y - 1][pixel_x];
+
+				let errors2 = predictors.map(pred => 1/(1 + Math.pow(VAL2 - pred.predict(L2,TL2,T2,TR2),2)));
+
+				let VAL = green_channel[
+					pixel_y
+				][
+					pixel_x
+				];
+				let L  = green_channel[pixel_y][pixel_x - 1];
+				let TL = green_channel[pixel_y - 1][pixel_x - 1];
+				let T  = green_channel[pixel_y - 1][pixel_x];
+				let TR = green_channel[pixel_y - 1][pixel_x + 1];
+
+				let weightSum = 0;
+				let predSum = 0;
+
+				predictors.forEach((predictor,pIndex) => {
+					let entryWeight = errors1[pIndex] * errors2[pIndex];
+					weightSum += entryWeight;
+					let ppp = predictors[pIndex].predict(L,TL,T,TR);
+					predSum += entryWeight * ppp;
+				});
+				collected.push((VAL - Math.round(predSum/weightSum) + 256) % 256)
+			}
+		}
+		return collected
+	}
 
 	let coded = tile_predictors.map((predictor,index) => predictBlock(predictor,index));
 
 	let entropy = estimateEntropy(coded.flat());
 	console.log(entropy/8,"initial");
 	let global_table = freqs(coded.flat());
-	if(contexts === 1){
+	if(contexts === "lz"){
+		let coded2;
+		for(let i=0;i<2;i++){
+			let new_tiles = [];
+			tile_predictors.forEach((tile,index) => {
+				let predictor_results = predictors.map((predictor,pIndex) => 
+					local_estimateEntropy_inclusive(
+						global_table,
+						predictBlock(pIndex,index)
+					)
+				);
+				predictor_results.push(
+					local_estimateEntropy_inclusive(
+						global_table,
+						predictBlockMix(index)
+					)
+				)
+				new_tiles.push(predictor_results.indexOf(Math.min(...predictor_results)))
+			});
+			coded2 = new_tiles.map((predictor,index) => (predictor === predictors.length ? predictBlockMix(index) : predictBlock(predictor,index)));
+			let entropy2 = estimateEntropy(coded2.flat());
+			if(entropy2 > entropy){
+				break
+			}
+			entropy = entropy2;
+			tile_predictors = new_tiles;
+			global_table = freqs(coded2.flat());
+			console.log(entropy/8,"secondary");
+		};
+		let entropyData = new Array(image_height).fill(0).map(_ => new Array(image_width).fill(0));
+		coded2.forEach((group,tile_index) => {
+			let gIndex = 0;
+			for(let y=0;y<BOUND;y++){
+				let pixel_y = Math.floor(tile_index / tile_width) * BOUND + y;
+				if(pixel_y >= image_height){
+					continue
+				}
+				for(let x=0;x<BOUND;x++){
+					let pixel_x = (tile_index % tile_width) * BOUND + x;
+					if(pixel_x >= image_width){
+						continue
+					}
+					entropyData[pixel_y][pixel_x] = local_estimateEntropy_exclusive(global_table,[group[gIndex++]])
+				}
+			}
+		});
+		let imagedata2 = green_channel.flat();
+		let entropyData2 = entropyData.flat();
+		let wiki2 = new Array(image_height).fill(0).map(_ => new Array(image_width).fill(0));
+		let matchDistances = [];
+		let matchLengths = [];
+		let nextDistances = [];
+		let savedEnt = 0;
+		let previousSeen = -1;
+		for(let i=0;i<imagedata2.length;i++){
+			let bestMatch = 0;
+			let bestLength = 0;
+			let bestMatch_ent = 0;
+			let bestMatch_ent_comp = 0;
+			for(let j=1;j<lzrangeormixfree && i - j > 0;j++){
+				let l_ent = 0;
+				for(let k=1;k<maxmatch && (i + k - 1) < imagedata2.length;k++){
+					if(imagedata2[i] !== imagedata2[i - j + k - 1]){
+						if(k >= minmatch && ((l_ent - codeFromValue(j)[1] - codeFromValue(k)[1]) > bestMatch_ent_comp)){
+							bestMatch = j;
+							bestMatch_ent = l_ent;
+							bestMatch_ent_comp = l_ent - codeFromValue(j)[1] - codeFromValue(k)[1];
+							bestLength = k;
+						}
+						break
+					}
+					l_ent += entropyData2[i + k - 1]
+				}
+			}
+			if(bestMatch && bestMatch_ent >= minentropy){
+				matchDistances.push(bestMatch);
+				matchLengths.push(bestLength);
+				savedEnt += bestMatch_ent;
+				nextDistances.push(i - previousSeen);
+				for(let retrace=0;retrace < bestLength;retrace++){
+					try{
+						wiki2[Math.floor(i / image_width)][i % image_width] = 255;
+					}
+					catch(e){
+						console.log(i,Math.floor(i / image_width),image_height)
+					}
+					i++
+				}
+				i--;
+				previousSeen = i;
+			}
+		}
+		drawCost(wiki2,image_width,image_height);
+		let c_1 = estimateEntropy_prefixcode(matchDistances)/8;
+		let c_2 = estimateEntropy_prefixcode(matchLengths)/8
+		let c_3 = estimateEntropy_prefixcode(nextDistances)/8
+		console.log("mDist",matchDistances,c_1);
+		console.log("mLength",matchLengths,c_2);
+		console.log("mNext",nextDistances,c_3);
+		console.log("saved",savedEnt/8);
+		console.log("total",savedEnt/8 - c_1 - c_2 - c_3,entropyData2.reduce((acc,val) => acc + val,0)/8 - (savedEnt/8 - c_1 - c_2 - c_3));
+	}
+	else if(lzrangeormixfree === "mixfree"){
+		let heatMap = coded.map(misses => local_estimateEntropy_exclusive(global_table,misses));
+		let medianSplitter = Stats.median(heatMap);
+		let groups = [[],[]];
+		coded.forEach((cell,index) => {
+			if(heatMap[index] < medianSplitter){
+				groups[0].push(cell)
+			}
+			else{
+				groups[1].push(cell)
+			}
+		});
+		let entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+		console.log((entropy)/8,"secondary",groups.map(val => val.length));
+		console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)))/8,"implied overhead + " + groups.length + " frequency tables");
+
+		let frequencies = groups.map(group => freqs(group.flat()));
+
+		let coded2;
+		let predictorCounts;
+
+		for(let iterations=0;iterations < contexts + 3;iterations++){
+			iterations++;
+			let new_tiles = [];
+			tile_predictors.forEach((tile,index) => {
+				let predictor_results = groups.map((group,gIndex) =>
+					predictors.map((predictor,pIndex) => 
+						local_estimateEntropy_inclusive(
+							frequencies[gIndex],
+							predictBlock(pIndex,index)
+						)
+					)
+				);
+				let bests = predictor_results.map(result => Math.min(...result));
+				let best_best = Math.min(...bests);
+				let best_best_index = bests.indexOf(best_best);
+				new_tiles.push(predictor_results[best_best_index].indexOf(best_best))
+			});
+
+			coded2 = new_tiles.map((predictor,index) => predictBlock(predictor,index));
+
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				groups[estimates.indexOf(Math.min(...estimates))].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			if(groups.length < contexts){
+				let lengths = groups.map(a => a.length);
+
+				let largestIndex = lengths.indexOf(Math.max(...lengths));
+				let largest = groups.splice(largestIndex,1)[0];
+
+				heatMap = largest.map(misses => local_estimateEntropy_exclusive(frequencies[largestIndex],misses));
+				medianSplitter = Stats.median(heatMap);
+				let group_lower = [];
+				let group_upper = [];
+				largest.forEach((cell,index) => {
+					if(heatMap[index] < medianSplitter){
+						group_lower.push(cell)
+					}
+					else{
+						group_upper.push(cell)
+					}
+				});
+
+				if(group_lower.length){
+					groups.push(group_lower)
+				}
+				if(group_upper.length){
+					groups.push(group_upper)
+				}
+				frequencies = groups.map(group => freqs(group.flat()));
+			}
+
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			tile_predictors = new_tiles;
+			predictorCounts = new Array(predictors.length).fill(0);
+			tile_predictors.forEach(predictor => {
+				predictorCounts[predictor]++
+			})
+			console.log(entropy/8,"secondary with search",groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
+		for(let i=0;i<5;i++){
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				let group_index = estimates.indexOf(Math.min(...estimates));
+				tile_entropy[index] = group_index;
+				groups[group_index].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			console.log(entropy/8,"secondary, adjustment" + 1,groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
+		let predMap_cost = Math.ceil(estimateEntropy_freqs(predictorCounts)/8);
+		let entrMap_cost = Math.ceil(estimateEntropy_freqs(groups.map(group => group.length))/8);
+		let table_cost = frequencies.reduce((acc,val) => acc + estimate_table_size(val),0);
+		console.log("overhead",predMap_cost,entrMap_cost,table_cost);
+		console.log("total",Math.ceil(entropy/8 + predMap_cost + entrMap_cost + table_cost));
+		console.log("predictors",predictorCounts.map((count,index) => count + " " + predictors[index].name));
+		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val/(groups.length - 1))),tile_width,tile_height)
+		drawPredictorMap(tile_predictors.map(val => Math.floor(255 * val/(predictors.length - 1))),tile_width,tile_height)
+	}
+	else if(contexts === 1){
 		for(let i=0;i<3;i++){
 			let new_tiles = [];
 			tile_predictors.forEach((tile,index) => {
@@ -373,9 +814,15 @@ function tune(contexts){
 						predictBlock(pIndex,index)
 					)
 				);
+				predictor_results.push(
+					local_estimateEntropy_inclusive(
+						global_table,
+						predictBlockMix(index)
+					)
+				)
 				new_tiles.push(predictor_results.indexOf(Math.min(...predictor_results)))
 			});
-			let coded2 = new_tiles.map((predictor,index) => predictBlock(predictor,index));
+			let coded2 = new_tiles.map((predictor,index) => (predictor === predictors.length ? predictBlockMix(index) : predictBlock(predictor,index)));
 			let entropy2 = estimateEntropy(coded2.flat());
 			if(entropy2 > entropy){
 				break
@@ -383,15 +830,21 @@ function tune(contexts){
 			entropy = entropy2;
 			tile_predictors = new_tiles;
 			global_table = freqs(coded2.flat());
+			global_coded = coded2.flat();
 			console.log(entropy/8,"secondary");
 		}
-		let predictorCounts = new Array(predictors.length).fill(0);
+		let predictorCounts = new Array(predictors.length + 1).fill(0);
 		tile_predictors.forEach(predictor => {
 			predictorCounts[predictor]++
-		})
-		console.log((tile_number * 1/3 + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + 1 frequency table");
-		console.log("predictors",predictorCounts)
+		});
+		let predMap_cost = Math.ceil(estimateEntropy_freqs(predictorCounts)/8);
+		let table_cost = estimate_table_size(global_table);
+		console.log("global",global_table.join(","));
+		console.log("overhead",predMap_cost,table_cost);
+		console.log("predictors",predictorCounts);
+		console.log("total",Math.ceil(predMap_cost + table_cost + entropy/8));
 	}
+/*
 	else if(contexts === 2){
 		let heatMap = coded.map(misses => local_estimateEntropy_exclusive(global_table,misses));
 		let medianSplitter = Stats.median(heatMap);
@@ -492,10 +945,15 @@ function tune(contexts){
 		tile_predictors.forEach(predictor => {
 			predictorCounts[predictor]++
 		})
-		console.log((tile_number * 1/3 + estimateEntropy_freqs([group_lower.length,group_upper.length]) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + 2 frequency tables");
-		console.log("predictors",predictorCounts);
+		let predMap_cost = Math.ceil(estimateEntropy_freqs(predictorCounts)/8);
+		let entrMap_cost = Math.ceil(estimateEntropy_freqs([group_lower.length,group_upper.length])/8);
+		let table_cost = estimate_table_size(lower_freqs) + estimate_table_size(upper_freqs);
+		console.log("overhead",predMap_cost,entrMap_cost,table_cost);
+		console.log("total",Math.ceil(entropy/8 + predMap_cost + entrMap_cost + table_cost));
 		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val)),tile_width,tile_height)
+		drawPredictorMap(tile_predictors.map(val => Math.floor(255 * val/(predictors.length - 1))),tile_width,tile_height)
 	}
+*/
 	else{
 		let heatMap = coded.map(misses => local_estimateEntropy_exclusive(global_table,misses));
 		let medianSplitter = Stats.median(heatMap);
@@ -517,11 +975,7 @@ function tune(contexts){
 		let coded2;
 		let predictorCounts;
 
-		let iterations = 0;
-		while(groups.length < contexts){
-			if(iterations - contexts > 5){
-				break
-			}
+		for(let iterations=0;iterations < contexts + 3;iterations++){
 			iterations++;
 			let new_tiles = [];
 			tile_predictors.forEach((tile,index) => {
@@ -531,6 +985,11 @@ function tune(contexts){
 							frequencies[gIndex],
 							predictBlock(pIndex,index)
 						)
+					).concat(
+						local_estimateEntropy_inclusive(
+							frequencies[gIndex],
+							predictBlockMix(index)
+						)
 					)
 				);
 				let bests = predictor_results.map(result => Math.min(...result));
@@ -539,7 +998,7 @@ function tune(contexts){
 				new_tiles.push(predictor_results[best_best_index].indexOf(best_best))
 			});
 
-			coded2 = new_tiles.map((predictor,index) => predictBlock(predictor,index));
+			coded2 = new_tiles.map((predictor,index) => (predictor === predictors.length ? predictBlockMix(index) : predictBlock(predictor,index)));
 
 			groups = groups.map(_ => []);
 			coded2.forEach((cell,index) => {
@@ -549,35 +1008,37 @@ function tune(contexts){
 			groups = groups.filter(group => group.length);
 
 			frequencies = groups.map(group => freqs(group.flat()));
-			let lengths = groups.map(a => a.length);
+			if(groups.length < contexts){
+				let lengths = groups.map(a => a.length);
 
-			let largestIndex = lengths.indexOf(Math.max(...lengths));
-			let largest = groups.splice(largestIndex,1)[0];
+				let largestIndex = lengths.indexOf(Math.max(...lengths));
+				let largest = groups.splice(largestIndex,1)[0];
 
-			heatMap = largest.map(misses => local_estimateEntropy_exclusive(frequencies[largestIndex],misses));
-			medianSplitter = Stats.median(heatMap);
-			let group_lower = [];
-			let group_upper = [];
-			largest.forEach((cell,index) => {
-				if(heatMap[index] < medianSplitter){
-					group_lower.push(cell)
+				heatMap = largest.map(misses => local_estimateEntropy_exclusive(frequencies[largestIndex],misses));
+				medianSplitter = Stats.median(heatMap);
+				let group_lower = [];
+				let group_upper = [];
+				largest.forEach((cell,index) => {
+					if(heatMap[index] < medianSplitter){
+						group_lower.push(cell)
+					}
+					else{
+						group_upper.push(cell)
+					}
+				});
+
+				if(group_lower.length){
+					groups.push(group_lower)
 				}
-				else{
-					group_upper.push(cell)
+				if(group_upper.length){
+					groups.push(group_upper)
 				}
-			});
-
-			if(group_lower.length){
-				groups.push(group_lower)
+				frequencies = groups.map(group => freqs(group.flat()));
 			}
-			if(group_upper.length){
-				groups.push(group_upper)
-			}
-			frequencies = groups.map(group => freqs(group.flat()));
 
 			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
 			tile_predictors = new_tiles;
-			predictorCounts = new Array(predictors.length).fill(0);
+			predictorCounts = new Array(predictors.length + 1).fill(0);
 			tile_predictors.forEach(predictor => {
 				predictorCounts[predictor]++
 			})
@@ -599,7 +1060,14 @@ function tune(contexts){
 			console.log(entropy/8,"secondary, adjustment" + 1,groups.map(val => val.length));
 			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
 		}
+		let predMap_cost = Math.ceil(estimateEntropy_freqs(predictorCounts)/8);
+		let entrMap_cost = Math.ceil(estimateEntropy_freqs(groups.map(group => group.length))/8);
+		let table_cost = frequencies.reduce((acc,val) => acc + estimate_table_size(val),0);
+		console.log("overhead",predMap_cost,entrMap_cost,table_cost);
+		console.log("total",Math.ceil(entropy/8 + predMap_cost + entrMap_cost + table_cost));
+		console.log("predictors",predictorCounts);
 		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val/(groups.length - 1))),tile_width,tile_height)
+		drawPredictorMap(tile_predictors.map(val => Math.floor(255 * val/(predictors.length))),tile_width,tile_height)
 	}
 }
 
