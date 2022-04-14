@@ -138,13 +138,20 @@ function drawEntropyMap(imageData,width,height){
 
 let green_channel;
 
+//total 30689
+//total 30582
+//total 32264
+//total 32281
+//total 32253
+
+
 let predictors = [
 	{
-		name: "FFV1",
+		name: "(Grad)",
 		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
 	},
 	{
-		name: "FFV1_4",
+		name: "((Grad))",
 		predict: function(L,TL,T,TR){
 			let maxim = Math.max(L,T,TR);
 			let minim = Math.min(L,T,TR);
@@ -159,27 +166,11 @@ let predictors = [
 		}
 	},
 	{
-		name: "FFV1_cust",
+		name: "((puzzle))",
 		predict: function(L,TL,T,TR){
-			let maxim = Math.max(T);
-			let minim = Math.min(L,T,TR);
-			let pred = T + L - TL;
-			if(pred > maxim){
-				return maxim
-			}
-			else if(pred < minim){
-				return minim
-			}
-			return pred
-		}
-	},
-/*
-	{
-		name: "FFV1_4_up",
-		predict: function(L,TL,T,TR){
-			let maxim = 255;
-			let minim = Math.min(L,T,TR);
-			let pred = T + L - TL;
+			let maxim = Math.max(L,TR,TL);
+			let minim = Math.min(L,TR,TL);
+			let pred = TR + L - T;
 			if(pred > maxim){
 				return maxim
 			}
@@ -190,29 +181,36 @@ let predictors = [
 		}
 	},
 	{
-		name: "FFV1_4_down",
+		name: "puzzle",
 		predict: function(L,TL,T,TR){
-			let maxim = Math.max(L,T,TR);
-			let minim = 0;
-			let pred = T + L - TL;
-			if(pred > maxim){
-				return maxim
+			let pred = TR + L - T;
+			if(pred > 255){
+				return 255
 			}
-			else if(pred < minim){
-				return minim
+			else if(pred < 0){
+				return 0
 			}
 			return pred
 		}
-	},*/
+	},
 	{
-		name: "NULL",
-		predict: function(L,TL,T,TR){return 0}
+		name: "(puzzle)",
+		predict: function(L,TL,T,TR){return [TR,L,TR + L - T].sort((a,b) => a - b)[1]}
+	},
+	{
+		name: "full median",
+		predict: function(L,TL,T,TR,LL){
+			return [L,TL,T,TR,LL].sort((a,b) => a - b)[2]
+		}
 	},
 	{
 		name: "left",
 		predict: function(L,TL,T,TR){return L}
 	},
-
+	{
+		name: "NULL",
+		predict: function(L,TL,T,TR){return 0}
+	},
 	{
 		name: "top",
 		predict: function(L,TL,T,TR){return T}
@@ -225,59 +223,115 @@ let predictors = [
 		name: "top-right",
 		predict: function(L,TL,T,TR){return TR}
 	},
-
 	{
 		name: "median",
 		predict: function(L,TL,T,TR){return [T,L,TL].sort((a,b) => a - b)[1]}
 	},
 	{
-		name: "avg L-T",
-		predict: function(L,TL,T,TR){return Math.floor((T + L)/2)}
-	},
-
-	{
-		name: "avg L-TL",
-		predict: function(L,TL,T,TR){return Math.floor((L + TL)/2)}
+		name: "L_T",
+		predict: function(L,TL,T,TR){return Math.round((T + L)/2)}
 	},
 	{
-		name: "avg TL-T",
-		predict: function(L,TL,T,TR){return Math.floor((T + TL)/2)}
+		name: "L_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + TL)/2)}
 	},
 	{
-		name: "avg T-TR",
-		predict: function(L,TL,T,TR){return Math.floor((T + TR)/2)}
+		name: "TL_T",
+		predict: function(L,TL,T,TR){return Math.round((T + TL)/2)}
 	},
 	{
-		name: "avg3 L-L-TL",
-		predict: function(L,TL,T,TR){return Math.floor((L + L + TL)/3)}
+		name: "T_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TR)/2)}
 	},
 	{
-		name: "avg3 L-TL-TL",
-		predict: function(L,TL,T,TR){return Math.floor((L + TL + TL)/3)}
+		name: "L_L_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + L + TL)/3)}
 	},
 	{
-		name: "avg3 TL-TL-T",
-		predict: function(L,TL,T,TR){return Math.floor((TL + TL + T)/3)}
+		name: "L_TL_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + TL + TL)/3)}
 	},
 	{
-		name: "avg3 TL-T-T",
-		predict: function(L,TL,T,TR){return Math.floor((TL + T + T)/3)}
+		name: "T_TL_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TL + TR)/3)}
 	},
 	{
-		name: "avg3 T-T-TR",
-		predict: function(L,TL,T,TR){return Math.floor((T + T + TR)/3)}
+		name: "TL_TL_T",
+		predict: function(L,TL,T,TR){return Math.round((TL + TL + T)/3)}
 	},
 	{
-		name: "avg3 T-TR-TR",
-		predict: function(L,TL,T,TR){return Math.floor((T + TR + TR)/3)}
+		name: "TL_T_T",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T)/3)}
+	},
+	{
+		name: "T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + T + TR)/3)}
+	},
+	{
+		name: "T_TR_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TR + TR)/3)}
 	},
 	{
 		name: "avg4",
-		predict: function(L,TL,T,TR){return Math.floor((L + TL + T + TR)/4)}
+		predict: function(L,TL,T,TR){return Math.round((L + TL + T + TR)/4)}
 	},
 	{
-		name: "avg4 L-TL-TL-T",
-		predict: function(L,TL,T,TR){return Math.floor((L + TL + TL + T)/4)}
+		name: "avg4 L_TL_TL_T",
+		predict: function(L,TL,T,TR){return Math.round((L + TL + TL + T)/4)}
+	},
+	{
+		name: "avg4 L_L_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((L + L + T + TR)/4)}
+	},
+	{
+		name: "avg4 TL_T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T + TR)/4)}
+	},
+	{
+		name: "avg5 TL_T_T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T + T + TR)/5)}
+	},
+	{
+		name: "semi-paeth",
+		predict: function(L,TL,T,TR){
+			let p = T + L - TL;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
+		name: "demi-paeth",
+		predict: function(L,TL,T,TR){
+			let p = (T + 2*L - TL + TR)/3;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
+		name: "lemi-paeth",
+		predict: function(L,TL,T,TR,LL){
+			let p = (3*L - LL)/2;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
 	},
 	{
 		name: "paeth",
@@ -301,112 +355,264 @@ let predictors = [
 		}
 	},
 	{
-		name: "semi-paeth",
+		name: "weird",
+		predict: function(L,TL,T,TR){return Math.round((L + TR + 2*T)/4)}
+	},
+	{
+		name: "Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(T + L - TL,0),255)}
+	},
+	{
+		name: "CAH",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*L + 3*T - 2*TL)/4),0),255)}
+	},
+	{
+		name: "(CAH)",
 		predict: function(L,TL,T,TR){
-			let p = T + L - TL;
-			let Tp = Math.abs(T - p);
-			let Lp = Math.abs(L - p);
-			if(Tp < Lp){
-				return T
+			let maxim = Math.max(L,T,TR);
+			let minim = Math.min(L,T,TR);
+			let pred = Math.round((3*T + 3*L - 2*TL)/4);
+			if(pred > maxim){
+				return maxim
 			}
-			else{
-				return L
+			else if(pred < minim){
+				return minim
 			}
+			return pred
 		}
 	},
 	{
-		name: "weird",
-		predict: function(L,TL,T,TR){return Math.floor((L + TR + 2*T)/4)}
-	},
-	{
-		name: "CAF",
-		predict: function(L,TL,T,TR){return Math.min(Math.max(T + L - TL,0),255)}
-	},
-
-	{
-		name: "CAH",
-		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.floor((L+T)/2 + ((L+T)/2 - TL)/2),0),255)}
-	},
-
-	{
-		name: "SCAF",
-		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 3*L - 2*TL)/4),0),255)}
-	},
-	{
-		name: "c-SCAF",
+		name: "((CAH))",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 3*L - 2*TL)/4),Math.min(L,T)),Math.max(L,T))}
 	},
 	{
-		name: "SSCAF",
+		name: "Dog",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((5*T + 5*L - 2*TL)/8),0),255)}
 	},
 	{
-		name: "c-SSCAF",
+		name: "(Dog)",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((5*T + 5*L - 2*TL)/8),Math.min(L,T)),Math.max(L,T))}
 	},
 	{
-		name: "TCAF",
+		name: "T-Grad",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL)/2),0),255)}
 	},
 	{
-		name: "c-TCAF",
+		name: "mT-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - 2*TL)/3),0),255)}
+	},
+	{
+		name: "T-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL + TR)/3),0),255)}
+	},
+	{
+		name: "2T-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + L - TL)/3),0),255)}
+	},
+	{
+		name: "2T-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "(T-Grad)",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL)/2),Math.min(L,T)),Math.max(L,T))}
 	},
 	{
-		name: "LCAF",
+		name: "L-Grad",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL)/2),0),255)}
 	},
 	{
-		name: "c-LCAF",
+		name: "L-Grad_unT-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((TR + 2*L - TL)/2),0),255)}
+	},
+	{
+		name: "2L-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 3*L - TL)/3),0),255)}
+	},
+	{
+		name: "L-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL + TR)/3),0),255)}
+	},
+	{
+		name: "2L-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 3*L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "(L-Grad)",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL)/2),Math.min(L,T)),Math.max(L,T))}
 	},
 	{
-		name: "TTCAF",
+		name: "Raven",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 2*L - TL)/3),0),255)}
+	},
+	{
+		name: "Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 2*L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "T-Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL + TR)/5),0),255)}
+	},
+	{
+		name: "T-Raven",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL)/4),0),255)}
 	},
 	{
-		name: "c-TTCAF",
+		name: "(T-Raven)",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL)/4),Math.min(L,T)),Math.max(L,T))}
 	},
 	{
-		name: "LLCAF",
+		name: "L-Raven",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL)/4),0),255)}
 	},
 	{
-		name: "c-LLCAF",
+		name: "L-Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL + TR)/5),0),255)}
+	},
+	{
+		name: "(L-Raven)",
 		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL)/4),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "CAH-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*L + 3*T - 2*TL + TR)/5),0),255)}
+	},
+	{
+		name: "Leftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL)/2),0),255)}
+	},
+	{
+		name: "SmallLeftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(2*L - LL,0),255)}
+	},
+	{
+		name: "LargeLeftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((4*L - LL)/3),0),255)}
+	},
+	{
+		name: "(Leftian)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T)/2),0),255)}
+	},
+	{
+		name: "(LeftianGrad)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T + TR)/3),0),255)}
+	},
+	{
+		name: "LeftianGrad_unT-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + TR)/2),0),255)}
+	},
+	{
+		name: "(LeftianGrad-TR)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T + TR)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T)/3),0),255)}
+	},
+	{
+		name: "LeftianGrad-2T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 3*T)/4),0),255)}
+	},
+	{
+		name: "(LeftianGrad-T)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T + TR)/4),0),255)}
+	},
+	{
+		name: "LeftianGrad-2T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 3*T + TR)/5),0),255)}
+	},
+	{
+		name: "Leftian-T-TL",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TL + T)/4),0),255)}
+	},
+	{
+		name: "Leftian-T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + T)/3),0),255)}
+	},
+	{
+		name: "Leftian-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TR)/3),0),255)}
+	},
+	{
+		name: "SmallLeftian-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((2*L - LL + TR)/2),0),255)}
+	},
+	{
+		name: "SmallLeftian-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((2*L - LL + TR + T)/3),0),255)}
+	},
+	{
+		name: "(Leftian-TR)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TR)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "Leftian-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + T + TR)/4),0),255)}
+	},
+	{
+		name: "Leftian-2T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + 2*T)/4),0),255)}
+	},
+	{
+		name: "Leftian-2T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + 2*T + TR)/5),0),255)}
 	}
 ];
 /*
-for(let L=0;L<2;L++){
-	for(let T=0;T<2;T++){
+for(let L=0;L<5;L++){
+	for(let T=0;T<5;T++){
 		for(let TR=0;TR<2;TR++){
-			for(let TL=-1;TL<2;TL++){
-			let gsum = T + L + TR + TL;
+		for(let LL=-1;LL<=0;LL++){
+			for(let TL=-2;TL<0;TL++){
+			let gsum = T + L + TR + TL + LL;
 			if(gsum < 1){
 				continue
 			}
-			if([L,TL,T,TR].map(a => a/2).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+			if([L,TL,T,TR,LL].map(a => a/2).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
 				continue
 			}
-			if([L,TL,T,TR].map(a => a/3).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+			if([L,TL,T,TR,LL].map(a => a/3).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
 				continue
 			}
-			if([L,TL,T,TR].map(a => a/4).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+			if([L,TL,T,TR,LL].map(a => a/4).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
 				continue
 			}
-			if([L,TL,T,TR].map(a => a/5).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+			if([L,TL,T,TR,LL].map(a => a/5).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
 				continue
 			}
+
 predictors.push({
-	"name": [L,TL,T,TR].join(","),
-	"predict": function(a,b,c,d){return Math.min(Math.max(Math.round((L*a + TL*b + T*c + TR*d)/gsum),0),255)}
-})
-			}
+	"name": "[[[[[" + [L,TL,T,TR,LL].join(","),
+	//"predict": function(a,b,c,d,e){return Math.min(Math.max(Math.round((L*a + TL*b + T*c + TR*d + LL*e)/gsum),0),255)}
+	"predict": function(a,b,c,d,e){
+		let p = (L*a + TL*b + T*c + TR*d + LL*e)/gsum;
+		let Tp = Math.abs(c - p);
+		let Lp = Math.abs(a - p);
+		if(Tp < Lp){
+			return c
+		}
+		else{
+			return a
 		}
 	}
-}*/
-
+})
+			}
+		}}
+	}
+}
+*/
 /*
 [
 	[0,0,0,1],
@@ -582,7 +788,8 @@ function laplace(para){
 
 function freqs(list){
 	let freqs = new Array(256).fill(0);
-	list.forEach(value => freqs[value]++)
+	list.forEach(value => freqs[value]++);
+	freqs.total = list.length;
 	return freqs
 }
 function estimateEntropy(list){
@@ -601,10 +808,13 @@ function estimateEntropy_freqs(freqs){
 	return freqs.filter(val => val).reduce((acc,val) => acc - Math.log2(val/total) * val,0)
 }
 function local_estimateEntropy_inclusive(freqs,local_symbols){
+/*
 	let newFreqs = freqs.map(a => a);
 	local_symbols.forEach(symbol => newFreqs[symbol]++);
 	let total = newFreqs.reduce((acc,val) => acc + val,0);
 	return local_symbols.reduce((acc,val) => acc - Math.log2(newFreqs[val]/total),0)
+*/
+	return local_symbols.reduce((acc,val) => acc - Math.log2((freqs[val] || 1)/freqs.total),0)
 }
 function local_estimateEntropy_exclusive(freqs,local_symbols){//be aware of null symbols!
 	let total = freqs.reduce((acc,val) => acc + val,0);
@@ -733,14 +943,14 @@ const BOUND = 8;
 
 let global_coded;
 
-function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
+function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy,predTest,iter){
 	let image_width = green_channel[0].length;
 	let image_height = green_channel.length;
 	let tile_width = Math.ceil(image_width/BOUND);
 	let tile_height = Math.ceil(image_height/BOUND);
 	let tile_number = tile_width * tile_height;
 
-	let tile_predictors = new Array(tile_number).fill(0);
+	let tile_predictors = new Array(tile_number).fill(predTest || 0);
 	let tile_entropy = new Array(tile_number).fill(0);
 	let predictBlock = function(predictor,tile_index){
 		let collected = [];
@@ -760,6 +970,7 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 					pixel_x
 				];
 				let L;
+				let LL;
 				let TL;
 				let T;
 				let TR;
@@ -768,9 +979,16 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 					T = 128;
 					TR = 128;
 					if(pixel_x === 0){
-						L = 128
+						L = 128;
+						LL = 128;
 					}
 					else{
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
 						L = green_channel[pixel_y][pixel_x - 1]
 					}
 				}
@@ -778,21 +996,34 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 					T = green_channel[pixel_y - 1][pixel_x];
 					if(pixel_x === 0){
 						L = 128;
+						LL = 128;
 						TR = green_channel[pixel_y - 1][pixel_x + 1];
 						TL = 128;
 					}
 					else if(pixel_x === image_width - 1){
 						L = green_channel[pixel_y][pixel_x - 1];
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
 						TR = 128;
 						TL = green_channel[pixel_y - 1][pixel_x - 1];
 					}
 					else{
 						L = green_channel[pixel_y][pixel_x - 1];
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
 						TR = green_channel[pixel_y - 1][pixel_x + 1];
 						TL = green_channel[pixel_y - 1][pixel_x - 1];
 					}
 				}
-				collected.push((VAL - predictors[predictor].predict(L,TL,T,TR) + 256) % 256)
+				collected.push((VAL - predictors[predictor].predict(L,TL,T,TR,LL) + 256) % 256)
 			}
 		}
 		return collected
@@ -867,19 +1098,21 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 				let pixel_x = (tile_index % tile_width) * BOUND + x;
 				let VAL1= green_channel[pixel_y - 1][pixel_x];
 				let L1  = green_channel[pixel_y - 1][pixel_x - 1];
+				let LL1 = green_channel[pixel_y - 1][pixel_x - 2];
 				let TL1 = green_channel[pixel_y - 2][pixel_x - 1];
 				let T1  = green_channel[pixel_y - 2][pixel_x];
 				let TR1 = green_channel[pixel_y - 2][pixel_x + 1];
 
-				let errors1 = mixers[mixerIndex].map(pred => 1/(1 + Math.pow(VAL1 - predictors[pred].predict(L1,TL1,T1,TR1),2)));
+				let errors1 = mixers[mixerIndex].map(pred => 1/(1 + Math.pow(VAL1 - predictors[pred].predict(L1,TL1,T1,TR1,LL1),2)));
 
 				let VAL2= green_channel[pixel_y][pixel_x - 1];
 				let L2  = green_channel[pixel_y][pixel_x - 2];
+				let LL2 = green_channel[pixel_y][pixel_x - 3];
 				let TL2 = green_channel[pixel_y - 1][pixel_x - 2];
 				let T2  = green_channel[pixel_y - 1][pixel_x - 1];
 				let TR2 = green_channel[pixel_y - 1][pixel_x];
 
-				let errors2 = mixers[mixerIndex].map(pred => 1/(1 + Math.pow(VAL2 - predictors[pred].predict(L2,TL2,T2,TR2),2)));
+				let errors2 = mixers[mixerIndex].map(pred => 1/(1 + Math.pow(VAL2 - predictors[pred].predict(L2,TL2,T2,TR2,LL2),2)));
 
 				/*let errorsP = mixers[mixerIndex].map(pred => 1/(1 + (
 					Math.pow(VAL2 - predictors[pred].predict(L2,TL2,T2,TR2),2)
@@ -893,6 +1126,7 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 					pixel_x
 				];
 				let L  = green_channel[pixel_y][pixel_x - 1];
+				let LL = green_channel[pixel_y][pixel_x - 2];
 				let TL = green_channel[pixel_y - 1][pixel_x - 1];
 				let T  = green_channel[pixel_y - 1][pixel_x];
 				let TR = green_channel[pixel_y - 1][pixel_x + 1];
@@ -904,7 +1138,7 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 					//let entryWeight = errorsP[pIndex];
 					let entryWeight = errors1[pIndex] * errors2[pIndex];
 					weightSum += entryWeight;
-					let ppp = predictors[predictor].predict(L,TL,T,TR);
+					let ppp = predictors[predictor].predict(L,TL,T,TR,LL);
 					predSum += entryWeight * ppp;
 				});
 				collected.push((VAL - Math.round(predSum/weightSum) + 256) % 256)
@@ -1041,7 +1275,11 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 		let coded2;
 		let predictorCounts;
 
-		for(let iterations=0;iterations < contexts + 3;iterations++){
+		if(iter === undefined){
+			iter = contexts + 3
+		}
+
+		for(let iterations=0;iterations < iter;iterations++){
 			iterations++;
 			let new_tiles = [];
 			tile_predictors.forEach((tile,index) => {
@@ -1050,13 +1288,6 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 						local_estimateEntropy_inclusive(
 							frequencies[gIndex],
 							predictBlock(pIndex,index)
-						)
-					).concat(
-						mixers.map((_,mIndex) =>
-							local_estimateEntropy_inclusive(
-								frequencies[gIndex],
-								predictBlockMix2(index,mIndex)
-							)
 						)
 					)
 				)
@@ -1135,8 +1366,10 @@ function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
 		let table_cost = frequencies.reduce((acc,val) => acc + estimate_table_size(val),0);
 		console.log("overhead",predMap_cost,entrMap_cost,table_cost);
 		console.log("total",Math.ceil(entropy/8 + predMap_cost + entrMap_cost + table_cost));
-		console.log("predictors",predictorCounts.map((count,index) => count + " " + (predictors[index] || {name: "mixer"}).name));
-		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val/(groups.length - 1))),tile_width,tile_height)
+		let predCountish = predictorCounts.reduce((acc,val) => acc + val,0);
+		console.log("predictors",predictorCounts.map((count,index) => [count,(predictors[index] || {name: "mixer"}).name]).sort((b,a) => a[0] - b[0]).map(lava => lava[0] + " " + lava[1] + " " + Math.round(100*lava[0]/predCountish) + "%"));
+		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val/(groups.length - 1))),tile_width,tile_height);
+		//console.log(tile_entropy.join(","));
 		drawPredictorMap(tile_predictors.map(val => Math.floor(255 * val/(predictors.length + mixers.length - 1))),tile_width,tile_height)
 	}
 	else if(contexts === 1){
@@ -1424,8 +1657,14 @@ let html_encode = function(){
 				ctx.drawImage(img, 0, 0);
 				let contextData = ctx.getImageData(0,0,img.width,img.height).data;
 
-				let sub_green_data = rgba_to_subgreena(contextData);
-				green_channel = deMultiplexChannels(sub_green_data,img.width,img.height)[0];
+				//let sub_green_data = rgba_to_subgreena(contextData);
+				//green_channel = deMultiplexChannels(sub_green_data,img.width,img.height)[0];
+				let valla = rgba_to_custom1(contextData);
+				let arr = deMultiplexChannels(valla,img.width,img.height)
+				let R = arr[0];
+				let G = arr[1];
+				let B = arr[2];
+				green_channel = R;
 				drawGreyscale(green_channel,img.width,img.height);
 			});
 			img.src = e.target.result;

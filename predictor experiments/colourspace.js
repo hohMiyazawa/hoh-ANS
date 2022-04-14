@@ -156,6 +156,25 @@ function rgba_to_subgreena(imageData){
 	return outBuffer
 }
 
+function rgba_to_custom1(imageData){
+	let outBuffer = [];
+	for(let i=0;i<imageData.length;i += 4){
+		let R = imageData[i];
+		let G = imageData[i + 1];
+		let B = imageData[i + 2];
+
+		outBuffer[i] = R;
+		outBuffer[i + 1] = G;
+		outBuffer[i + 2] = B;
+		//outBuffer[i + 2] = (B - Math.floor((G + R)/2) + 256 + 128) % 256;
+		//outBuffer[i + 2] = (B - G + 256 + 128) % 256;
+		//outBuffer[i + 2] = (B - R + 256 + 128) % 256;
+		//outBuffer[i + 2] = (B - G + 256) % 256;
+		outBuffer[i + 3] = imageData[i + 3]
+	}
+	return outBuffer
+}
+
 function multiplexChannels(channelArray){
 	let imageData = [];
 	let width = channelArray[0][0].length;

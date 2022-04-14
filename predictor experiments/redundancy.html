@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Predictor experiments</title>
+		<style>
+.canvasContainer{
+	display: inline-block;
+	padding: 5px;
+	margin: 5px;
+	border: solid;
+	border-width: 1px;
+	border-radius: 3px;
+	max-width: 40%;
+}
+canvas{
+	max-width: 100%;
+	max-height: 600px;
+	min-width: 16px;
+}
+body{
+	background: rgb(200,200,200);
+	padding: 20px;
+}
+		</style>
+		<script src="colourspace.js"></script>
+	</head>
+	<body>
+		<div class="canvasContainer">
+			<h2>Original</h2>
+			<canvas id="preview" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Current layer</h2>
+			<canvas id="render" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Cost estimation</h2>
+			<p id="estimate"></p>
+			<canvas id="render_cost" width="0" height="0"></canvas>
+			<canvas id="predictor_map" width="0" height="0"></canvas>
+			<canvas id="entropy_map" width="0" height="0"></canvas>
+		</div>
+		<hr>
+		<h3>Upload</h3>
+		<input type="file" id="imageInput"><br>
+		<button id="encodeButton">Load</button>
+		<h4>Predictors:</h4>
+		<div id="parameters"></div>
+		<button onclick="tune()">Tune</button>
+		<pre id="encodeStats"></pre>
+		<script>
+function huffSize(freqs,total){
+	if(freqs.length < 2){
+		return total
+	}
+	let sorted = freqs.sort((b,a) => a - b);
+	let a = sorted.pop();
+	let b = sorted.pop();
+	let sumi = a+b;
+	sorted.push(sumi);
+	return huffSize(sorted,total + sumi);
+}
+
+function skew(freqs,e_freqs){
+	let total = freqs.reduce((acc,val) => acc + val,0);
+	let e_total = e_freqs.reduce((acc,val) => acc + val,0);
+	let shannon = freqs.filter(e => e).reduce((acc,val) => acc - val*Math.log2(val/total),0);
+	let e_shannon = freqs.reduce((acc,val,index) => {
+		if(val === 0){
+			return acc
+		}
+		return acc - val*Math.log2(e_freqs[index]/e_total)
+	},0);
+	console.log(shannon,e_shannon);
+	return e_shannon/shannon
+}
+
+let side = 0;
+function redundancy(freqs){
+	let total = freqs.reduce((acc,val) => acc + val,0);
+	let defaultEntropy = Math.log2(freqs.length) * total;
+	let shannon = freqs.filter(e => e).reduce((acc,val) => acc - val*Math.log2(val/total),0);
+	let huff = huffSize(freqs,0);
+	console.log("default: ",defaultEntropy,defaultEntropy/total);
+	console.log("shannon: ",shannon,shannon/total);
+	console.log("huffmann: ",huff,huff/total,huff/shannon - 1);
+	let adjusted = freqs.map(val => {
+		if(val === 0){
+			return 0
+		}
+		else{
+			return Math.pow(2,Math.floor(Math.log2(val)));
+		}
+	});
+	let total2 = adjusted.reduce((acc,val) => acc + val,0);
+	let less = adjusted.reduce((acc,val,index) => {
+		if(val == 0){
+			return acc;
+		}
+		return acc - freqs[index]*Math.log2(val/total2)
+	},0);
+	console.log("less: ",less);
+
+	if(freqs.length === 256){
+		let maxChange = Math.max(...freqs);
+		let conversion = maxChange / 254;
+		let squosh = [];
+		for(let i=0;i<256;i++){
+			squosh[i] = Math.ceil(freqs[i] / conversion);
+		}
+		let total3 = squosh.reduce((acc,val) => acc + val,0);
+		let more = squosh.reduce((acc,val,index) => {
+			if(val == 0){
+				return acc;
+			}
+			return acc - freqs[index]*Math.log2(val/total3)
+		},0);
+		console.log("more: ",more);
+		side = squosh;
+	}
+	let prebits = 4;
+	let adjusted2 = freqs.map(val => {
+		if(val == 0){
+			return 0
+		}
+		else{
+			let magnitude = Math.pow(2,Math.floor(Math.log2(val)));
+			return Math.round(val/(magnitude/(1 << prebits))) * (magnitude/(1 << prebits))
+		}
+	});
+	let total2_2 = adjusted2.reduce((acc,val) => acc + val,0);
+	let less2 = adjusted2.reduce((acc,val,index) => {
+		if(val == 0){
+			return acc;
+		}
+		return acc - freqs[index]*Math.log2(val/total2_2)
+	},0);
+	console.log("less2: ",less2);
+
+	let prebits2 = 1;
+	let adjusted3 = freqs.map(val => {
+		if(val == 0){
+			return 0
+		}
+		else{
+			let magnitude = Math.pow(2,Math.floor(Math.log2(val)));
+			return Math.round(val/(magnitude/(1 << prebits2))) * (magnitude/(1 << prebits2))
+		}
+	});
+	let total3_3 = adjusted3.reduce((acc,val) => acc + val,0);
+	let less3 = adjusted3.reduce((acc,val,index) => {
+		if(val == 0){
+			return acc;
+		}
+		return acc - freqs[index]*Math.log2(val/total3_3)
+	},0);
+	console.log("less3: ",less3,adjusted3);
+}
+		</script>
+	</body>
+</html>

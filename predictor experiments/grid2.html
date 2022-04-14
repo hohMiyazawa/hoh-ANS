@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>Predictor experiments</title>
+		<style>
+.canvasContainer{
+	display: inline-block;
+	padding: 5px;
+	margin: 5px;
+	border: solid;
+	border-width: 1px;
+	border-radius: 3px;
+	max-width: 40%;
+}
+canvas{
+	max-width: 100%;
+	max-height: 600px;
+	min-width: 16px;
+}
+body{
+	background: rgb(200,200,200);
+	padding: 20px;
+}
+		</style>
+		<script src="colourspace.js"></script>
+	</head>
+	<body>
+		<div class="canvasContainer">
+			<h2>Original</h2>
+			<canvas id="preview" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Current layer</h2>
+			<canvas id="render" width="0" height="0"></canvas>
+		</div>
+		<div class="canvasContainer">
+			<h2>Cost estimation</h2>
+			<p id="estimate"></p>
+			<canvas id="render_cost" width="0" height="0"></canvas>
+			<canvas id="predictor_map" width="0" height="0"></canvas>
+			<canvas id="entropy_map" width="0" height="0"></canvas>
+		</div>
+		<hr>
+		<h3>Upload</h3>
+		<input type="file" id="imageInput"><br>
+		<button id="encodeButton">Load</button>
+		<h4>Predictors:</h4>
+		<div id="parameters"></div>
+		<button onclick="tune()">Tune</button>
+		<pre id="encodeStats"></pre>
+		<script>
+let saveByteArray = (function(){
+	let a = document.createElement("a");
+	document.body.appendChild(a);
+	a.style = "display: none";
+	return function(data,name){
+		let blob = new Blob(data, {type: "octet/stream"});
+		let url = window.URL.createObjectURL(blob);
+		a.href = url;
+		a.download = name;
+		a.click();
+		window.URL.revokeObjectURL(url)
+	}
+}())
+
+function readFileAsArrayBuffer(file, success, error) {
+	let fr = new FileReader();
+	fr.addEventListener('error', error, false);
+	if(fr.readAsBinaryString){
+		fr.addEventListener('load', function(){
+			var string = this.resultString != null ? this.resultString : this.result;
+			var result = new Uint8Array(string.length);
+			for(var i = 0; i < string.length; i++){
+				result[i] = string.charCodeAt(i)
+			}
+			success(result.buffer)
+		}, false);
+		return fr.readAsBinaryString(file);
+	}
+	else {
+		fr.addEventListener('load', function(){
+			success(this.result)
+		}, false);
+		return fr.readAsArrayBuffer(file)
+	}
+}
+
+function drawToCanvas(imageData,id){
+	let canvas = document.getElementById(id);
+	if(!imageData.imageData){
+		return
+	}
+	canvas.width = imageData.width;
+	canvas.height = imageData.height;
+	let ctx = canvas.getContext("2d");
+	let image = new ImageData(new Uint8ClampedArray(imageData.imageData),imageData.width);
+	ctx.putImageData(image,0,0);
+}
+
+function drawGreyscale(imageData,width,height){
+	let opacity = new Array(imageData.length).fill(0).map(_ => new Array(imageData[0].length).fill(255));
+	let image = new ImageData(new Uint8ClampedArray(multiplexChannels([imageData,imageData,imageData,opacity])),width);
+	let canvas = document.getElementById("render");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+function drawCost(imageData,width,height){
+	let opacity = new Array(imageData.length).fill(0).map(_ => new Array(imageData[0].length).fill(255));
+	let image = new ImageData(new Uint8ClampedArray(multiplexChannels([imageData,imageData,imageData,opacity])),width);
+	let canvas = document.getElementById("render_cost");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+function drawPredictorMap(imageData,width,height){
+	let image = new ImageData(new Uint8ClampedArray(imageData.map(val => [val,val,val,255]).flat()),width);
+	let canvas = document.getElementById("predictor_map");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+function drawEntropyMap(imageData,width,height){
+	let image = new ImageData(new Uint8ClampedArray(imageData.map(val => [val,val,val,255]).flat()),width);
+	let canvas = document.getElementById("entropy_map");
+	canvas.width = width;
+	canvas.height = height;
+	let ctx = canvas.getContext("2d");
+	ctx.putImageData(image,0,0);
+}
+
+let green_channel;
+
+//total 30689
+//total 30582
+//total 32264
+//total 32281
+//total 32253
+
+
+let predictors = [
+	{
+		name: "(Grad)",
+		predict: function(L,TL,T,TR){return [T,L,T + L - TL].sort((a,b) => a - b)[1]}
+	},
+	{
+		name: "((Grad))",
+		predict: function(L,TL,T,TR){
+			let maxim = Math.max(L,T,TR);
+			let minim = Math.min(L,T,TR);
+			let pred = T + L - TL;
+			if(pred > maxim){
+				return maxim
+			}
+			else if(pred < minim){
+				return minim
+			}
+			return pred
+		}
+	},
+	{
+		name: "((puzzle))",
+		predict: function(L,TL,T,TR){
+			let maxim = Math.max(L,TR,TL);
+			let minim = Math.min(L,TR,TL);
+			let pred = TR + L - T;
+			if(pred > maxim){
+				return maxim
+			}
+			else if(pred < minim){
+				return minim
+			}
+			return pred
+		}
+	},
+	{
+		name: "puzzle",
+		predict: function(L,TL,T,TR){
+			let pred = TR + L - T;
+			if(pred > 255){
+				return 255
+			}
+			else if(pred < 0){
+				return 0
+			}
+			return pred
+		}
+	},
+	{
+		name: "(puzzle)",
+		predict: function(L,TL,T,TR){return [TR,L,TR + L - T].sort((a,b) => a - b)[1]}
+	},
+	{
+		name: "full median",
+		predict: function(L,TL,T,TR,LL){
+			return [L,TL,T,TR,LL].sort((a,b) => a - b)[2]
+		}
+	},
+	{
+		name: "left",
+		predict: function(L,TL,T,TR){return L}
+	},
+	{
+		name: "NULL",
+		predict: function(L,TL,T,TR){return 0}
+	},
+	{
+		name: "top",
+		predict: function(L,TL,T,TR){return T}
+	},
+	{
+		name: "top-left",
+		predict: function(L,TL,T,TR){return TL}
+	},
+	{
+		name: "top-right",
+		predict: function(L,TL,T,TR){return TR}
+	},
+	{
+		name: "median",
+		predict: function(L,TL,T,TR){return [T,L,TL].sort((a,b) => a - b)[1]}
+	},
+	{
+		name: "L_T",
+		predict: function(L,TL,T,TR){return Math.round((T + L)/2)}
+	},
+	{
+		name: "L_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + TL)/2)}
+	},
+	{
+		name: "TL_T",
+		predict: function(L,TL,T,TR){return Math.round((T + TL)/2)}
+	},
+	{
+		name: "T_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TR)/2)}
+	},
+	{
+		name: "L_L_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + L + TL)/3)}
+	},
+	{
+		name: "L_TL_TL",
+		predict: function(L,TL,T,TR){return Math.round((L + TL + TL)/3)}
+	},
+	{
+		name: "T_TL_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TL + TR)/3)}
+	},
+	{
+		name: "TL_TL_T",
+		predict: function(L,TL,T,TR){return Math.round((TL + TL + T)/3)}
+	},
+	{
+		name: "TL_T_T",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T)/3)}
+	},
+	{
+		name: "T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + T + TR)/3)}
+	},
+	{
+		name: "T_TR_TR",
+		predict: function(L,TL,T,TR){return Math.round((T + TR + TR)/3)}
+	},
+	{
+		name: "avg4",
+		predict: function(L,TL,T,TR){return Math.round((L + TL + T + TR)/4)}
+	},
+	{
+		name: "avg4 L_TL_TL_T",
+		predict: function(L,TL,T,TR){return Math.round((L + TL + TL + T)/4)}
+	},
+	{
+		name: "avg4 L_L_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((L + L + T + TR)/4)}
+	},
+	{
+		name: "avg4 TL_T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T + TR)/4)}
+	},
+	{
+		name: "avg5 TL_T_T_T_TR",
+		predict: function(L,TL,T,TR){return Math.round((TL + T + T + T + TR)/5)}
+	},
+	{
+		name: "semi-paeth",
+		predict: function(L,TL,T,TR){
+			let p = T + L - TL;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
+		name: "demi-paeth",
+		predict: function(L,TL,T,TR){
+			let p = (T + 2*L - TL + TR)/3;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
+		name: "lemi-paeth",
+		predict: function(L,TL,T,TR,LL){
+			let p = (3*L - LL)/2;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			if(Tp < Lp){
+				return T
+			}
+			else{
+				return L
+			}
+		}
+	},
+	{
+		name: "paeth",
+		predict: function(L,TL,T,TR){
+			let p = T + L - TL;
+			let Tp = Math.abs(T - p);
+			let Lp = Math.abs(L - p);
+			let TLp = Math.abs(TL - p);
+			if(Tp < Lp){
+				if(Tp < TLp){
+					return T;
+				}
+				return TL;
+			}
+			else{
+				if(Lp < TLp){
+					return L;
+				}
+				return TL;
+			}
+		}
+	},
+	{
+		name: "weird",
+		predict: function(L,TL,T,TR){return Math.round((L + TR + 2*T)/4)}
+	},
+	{
+		name: "Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(T + L - TL,0),255)}
+	},
+	{
+		name: "CAH",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*L + 3*T - 2*TL)/4),0),255)}
+	},
+	{
+		name: "(CAH)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 3*L - 2*TL)/4),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "Dog",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((5*T + 5*L - 2*TL)/8),0),255)}
+	},
+	{
+		name: "(Dog)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((5*T + 5*L - 2*TL)/8),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "T-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL)/2),0),255)}
+	},
+	{
+		name: "mT-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - 2*TL)/3),0),255)}
+	},
+	{
+		name: "T-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL + TR)/3),0),255)}
+	},
+	{
+		name: "2T-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + L - TL)/3),0),255)}
+	},
+	{
+		name: "2T-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "(T-Grad)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + L - TL)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "L-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL)/2),0),255)}
+	},
+	{
+		name: "L-Grad_unT-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((TR + 2*L - TL)/2),0),255)}
+	},
+	{
+		name: "2L-Grad",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 3*L - TL)/3),0),255)}
+	},
+	{
+		name: "L-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL + TR)/3),0),255)}
+	},
+	{
+		name: "2L-Grad-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 3*L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "(L-Grad)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((T + 2*L - TL)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "Raven",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 2*L - TL)/3),0),255)}
+	},
+	{
+		name: "Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 2*L - TL + TR)/4),0),255)}
+	},
+	{
+		name: "T-Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL + TR)/5),0),255)}
+	},
+	{
+		name: "T-Raven",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL)/4),0),255)}
+	},
+	{
+		name: "(T-Raven)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*T + 2*L - TL)/4),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "L-Raven",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL)/4),0),255)}
+	},
+	{
+		name: "L-Raven-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL + TR)/5),0),255)}
+	},
+	{
+		name: "(L-Raven)",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((2*T + 3*L - TL)/4),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "CAH-TR",
+		predict: function(L,TL,T,TR){return Math.min(Math.max(Math.round((3*L + 3*T - 2*TL + TR)/5),0),255)}
+	},
+	{
+		name: "Leftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL)/2),0),255)}
+	},
+	{
+		name: "SmallLeftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(2*L - LL,0),255)}
+	},
+	{
+		name: "LargeLeftian",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((4*L - LL)/3),0),255)}
+	},
+	{
+		name: "(Leftian)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T)/2),0),255)}
+	},
+	{
+		name: "(LeftianGrad)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T)/2),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T + TR)/3),0),255)}
+	},
+	{
+		name: "LeftianGrad_unT-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + TR)/2),0),255)}
+	},
+	{
+		name: "(LeftianGrad-TR)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + T + TR)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T)/3),0),255)}
+	},
+	{
+		name: "LeftianGrad-2T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 3*T)/4),0),255)}
+	},
+	{
+		name: "(LeftianGrad-T)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "LeftianGrad-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 2*T + TR)/4),0),255)}
+	},
+	{
+		name: "LeftianGrad-2T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL - TL + 3*T + TR)/5),0),255)}
+	},
+	{
+		name: "Leftian-T-TL",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TL + T)/4),0),255)}
+	},
+	{
+		name: "Leftian-T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + T)/3),0),255)}
+	},
+	{
+		name: "Leftian-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TR)/3),0),255)}
+	},
+	{
+		name: "SmallLeftian-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((2*L - LL + TR)/2),0),255)}
+	},
+	{
+		name: "SmallLeftian-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((2*L - LL + TR + T)/3),0),255)}
+	},
+	{
+		name: "(Leftian-TR)",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + TR)/3),Math.min(L,T)),Math.max(L,T))}
+	},
+	{
+		name: "Leftian-T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + T + TR)/4),0),255)}
+	},
+	{
+		name: "Leftian-2T",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + 2*T)/4),0),255)}
+	},
+	{
+		name: "Leftian-2T-TR",
+		predict: function(L,TL,T,TR,LL){return Math.min(Math.max(Math.round((3*L - LL + 2*T + TR)/5),0),255)}
+	}
+];
+/*
+for(let L=0;L<5;L++){
+	for(let T=0;T<5;T++){
+		for(let TR=0;TR<2;TR++){
+		for(let LL=-1;LL<=0;LL++){
+			for(let TL=-2;TL<0;TL++){
+			let gsum = T + L + TR + TL + LL;
+			if(gsum < 1){
+				continue
+			}
+			if([L,TL,T,TR,LL].map(a => a/2).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+				continue
+			}
+			if([L,TL,T,TR,LL].map(a => a/3).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+				continue
+			}
+			if([L,TL,T,TR,LL].map(a => a/4).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+				continue
+			}
+			if([L,TL,T,TR,LL].map(a => a/5).filter(val => Math.ceil(val) !== Math.floor(val)).length === 0){
+				continue
+			}
+
+predictors.push({
+	"name": "[[[[[" + [L,TL,T,TR,LL].join(","),
+	//"predict": function(a,b,c,d,e){return Math.min(Math.max(Math.round((L*a + TL*b + T*c + TR*d + LL*e)/gsum),0),255)}
+	"predict": function(a,b,c,d,e){
+		let p = (L*a + TL*b + T*c + TR*d + LL*e)/gsum;
+		let Tp = Math.abs(c - p);
+		let Lp = Math.abs(a - p);
+		if(Tp < Lp){
+			return c
+		}
+		else{
+			return a
+		}
+	}
+})
+			}
+		}}
+	}
+}
+*/
+/*
+[
+	[0,0,0,1],
+	[0,0,1,0],
+	[0,1,1,0],
+	[0,1,3,0],
+	[1,0,0,0],
+	[1,-1,1,0],
+	[1,-1,2,0],
+	[1,-1,3,0],
+	[1,0,3,0],
+	[2,-1,0,1],
+	[2,-1,0,2],
+	[2,-1,0,3],
+	[2,-1,1,0],
+	[2,-1,1,1],
+	[3,-1,0,1],
+	[3,-1,1,0]
+].forEach(selected => {
+	let L = selected[0];
+	let TL = selected[1];
+	let T = selected[2];
+	let TR = selected[3];
+	let gsum = L + TL + T + TR;
+	predictors.push({
+		"name": [L,TL,T,TR].join(","),
+		"predict": function(a,b,c,d){return Math.min(Math.max(Math.round((L*a + TL*b + T*c + TR*d)/gsum),0),255)}
+	})
+})
+*/
+
+
+/*
+"102 0,0,1,0"
+"287 1,-1,1,0"
+"272 1,0,1,0"
+"419 1,-1,2,0" (L + 2*T - TL)/2
+"417 1,0,2,0"  (L + 2*T)/3
+"159 1,-1,2,1"
+"175 1,0,2,1"
+"188 2,-1,0,1"
+"128 2,-1,0,2"
+"322 2,-1,1,0" (2*L + T - TL)/2
+"147 2,0,1,0"
+"338 2,-1,1,1" (2*L + T + TR - TL)/3
+"115 2,0,1,1"
+"507 2,-1,2,0" (2*L + 2*T - TL)/3
+"113 2,-2,2,1"
+"332 2,-1,2,1" (2*L + 2*T + TR - TL)/4
+"193 2,0,2,1"
+*/
+
+/*
+"826 3,-1,1,1"
+"702 2,-1,1,1"
+"587 1,-1,1,0" CAF
+"530 3,-1,2,1"
+"482 1,0,0,0"  LEFT
+"430 2,-1,2,0"
+"424 0,0,1,0"  TOP
+"391 2,-1,1,0"
+"327 3,-1,0,1"
+"326 2,-1,2,1"
+"308 3,-1,1,2"
+"303 3,-1,2,0"
+"301 2,-1,3,1"
+"280 3,-1,0,2"
+"272 1,-1,2,0"
+"266 3,-1,3,1"
+"256 2,-1,3,0"
+"242 3,-1,3,0"
+"224 3,0,1,1"
+"221 3,0,0,1"
+"194 2,0,0,1"
+"188 3,-1,1,0"
+"187 2,-1,0,1"
+"167 2,0,1,1"
+"160 1,-1,3,0"
+"148 3,-1,2,2"
+"133 3,0,0,2"
+"127 1,0,1,0"
+"120 3,0,2,1"
+"118 3,-1,3,2"
+"99 2,0,2,1"
+"97 3,0,1,0"
+"95 3,0,3,1"
+"91 3,0,1,2"
+"84 2,-1,0,2"
+"83 2,0,1,0"
+"80 1,0,0,1"
+"80 2,-1,2,2"
+*/
+
+
+/*
+"1890 3,-1,0,2"
+"1698 3,-1,1,1"
+"1160 3,-1,0,1"
+"813 2,-1,1,1"
+"617 3,-1,2,1"
+"528 2,-1,0,1"
+"469 3,-1,2,0"
+"446 3,-1,1,2"
+"377 3,0,1,1"
+"377 3,0,0,1"
+"283 3,-1,0,3"
+"275 3,-1,3,1"
+"267 3,0,2,1"
+"253 2,0,0,1"
+"250 2,-1,1,0"
+"248 2,-1,0,2"
+"238 3,-1,3,0"
+"228 3,-1,2,2"
+"219 2,0,1,1"
+"198 2,-1,2,1"
+"191 2,-1,2,0"
+"190 2,0,1,0"
+"183 3,0,0,2"
+"183 3,0,2,0"
+"177 1,0,1,0"
+"165 3,-1,1,0"
+"156 3,0,3,1"
+"153 3,0,1,2"
+"152 3,0,1,0"
+"127 3,-1,3,2"
+"123 3,0,2,2"
+"120 2,0,2,1"
+"116 2,-1,1,2"
+"114 3,-1,1,3"
+"94 2,-1,3,1"
+"94 3,1,1,1"
+"85 1,0,0,1"
+"82 3,-1,2,3"
+"80 2,0,3,0"
+*/
+
+const Stats = {
+	average: function(list){
+		return list.reduce((a,b) => (a || 0) + (b || 0))/list.length
+	},
+	median: function(list){
+		let temp = [...list].sort((a,b) => a - b);
+		return (
+			temp[Math.floor((temp.length - 1)/2)]
+			+ temp[Math.ceil((temp.length - 1)/2)]
+		)/2;
+	},
+	mode: function(list){
+		return [...list].sort(
+			(b,a) => list.filter(
+				e => e === a
+			).length - list.filter(
+				e => e === b
+			).length
+		)[0];
+	}
+}
+
+function laplace(para){
+	let freqs = new Array(256).fill(0);
+	return freqs.map((_,index) => Math.pow(2,-Math.min(index,256 - index)/para))
+}
+
+function freqs(list){
+	let freqs = new Array(256).fill(0);
+	list.forEach(value => freqs[value]++)
+	freqs.total = list.length;
+	return freqs
+}
+function estimateEntropy(list){
+	const freqs = {};
+	list.forEach(symbol => {
+		freqs[symbol] = (freqs[symbol] || 0) + 1
+	})
+	let entropy = 0;
+	Object.keys(freqs).map(key => freqs[key]).forEach(key => {
+		entropy += - key * Math.log2(key/list.length)
+	})
+	return entropy
+}
+function estimateEntropy_freqs(freqs){
+	let total = freqs.reduce((acc,val) => acc + val,0);
+	return freqs.filter(val => val).reduce((acc,val) => acc - Math.log2(val/total) * val,0)
+}
+function local_estimateEntropy_inclusive(freqs,local_symbols){
+/*
+	let newFreqs = freqs.map(a => a);
+	local_symbols.forEach(symbol => newFreqs[symbol]++);
+	let total = newFreqs.reduce((acc,val) => acc + val,0);
+	return local_symbols.reduce((acc,val) => acc - Math.log2(newFreqs[val]/total),0)
+*/
+	//let total = freqs.reduce((acc,val) => acc + val,0);
+	return local_symbols.reduce((acc,val) => acc - Math.log2((freqs[val] || 1)/freqs.total),0)
+
+}
+function local_estimateEntropy_exclusive(freqs,local_symbols){//be aware of null symbols!
+	let total = freqs.reduce((acc,val) => acc + val,0);
+	return local_symbols.reduce((acc,val) => acc - Math.log2(freqs[val]/total),0)
+}
+function estimate_table_size(freqs){//bytes
+	let largest = Math.max(...freqs);
+	let bits = Math.ceil(Math.log2(largest));
+	let best = Math.ceil(bits*freqs.length/8) + 1;
+	for(let lower=bits-1;bits - lower <=8;lower--){
+		let within = freqs.filter(a => a <= Math.pow(2,lower) - 1).length;
+		let maybe_better = Math.ceil((lower*within + bits*(freqs.length - within))/8) + 3;
+		if(maybe_better < best){
+			best = maybe_better
+		}
+	}
+	return best
+}
+function codeFromValue(value){
+	if(value <= 4){
+		return [value - 1,0]
+	}
+	if(value <= 6){
+		return [4,1]
+	}
+	if(value <= 8){
+		return [5,1]
+	}
+	if(value <= 12){
+		return [6,2]
+	}
+	if(value <= 16){
+		return [7,2]
+	}
+	if(value <= 24){
+		return [8,3]
+	}
+	if(value <= 32){
+		return [9,3]
+	}
+	if(value <= 48){
+		return [10,4]
+	}
+	if(value <= 64){
+		return [11,4]
+	}
+	if(value <= 96){
+		return [12,5]
+	}
+	if(value <= 128){
+		return [13,5]
+	}
+	if(value <= 192){
+		return [14,6]
+	}
+	if(value <= 256){
+		return [15,6]
+	}
+	if(value <= 384){
+		return [16,7]
+	}
+	if(value <= 512){
+		return [17,7]
+	}
+	if(value <= 768){
+		return [18,8]
+	}
+	if(value <= 1024){
+		return [19,8]
+	}
+	if(value <= 1536){
+		return [20,9]
+	}
+	if(value <= 2048){
+		return [21,9]
+	}
+	if(value <= 3072){
+		return [22,10]
+	}
+	if(value <= 4096){
+		return [23,10]
+	}
+	if(value <= 4096 + 2048){
+		return [24,11]
+	}
+	if(value <= 8192){
+		return [25,11]
+	}
+	if(value <= 8192 * 1.5){
+		return [26,12]
+	}
+	if(value <= 8192 * 2){
+		return [27,12]
+	}
+	if(value <= 8192 * 3){
+		return [28,13]
+	}
+	if(value <= 8192 * 4){
+		return [29,13]
+	}
+	if(value <= 8192 * 6){
+		return [30,14]
+	}
+	if(value <= 8192 * 8){
+		return [31,14]
+	}
+	if(value <= 8192 * 12){
+		return [32,15]
+	}
+	if(value <= 8192 * 16){
+		return [33,15]
+	}
+	if(value <= 8192 * 24){
+		return [34,16]
+	}
+	if(value <= 8192 * 32){
+		return [35,16]
+	}
+}
+function estimateEntropy_prefixcode(list){
+	let pairs = list.map(val => codeFromValue(val));
+	return estimateEntropy(pairs.map(pair => pair[0])) + pairs.map(pair => pair[1]).reduce((acc,val) => acc + val,0)
+}
+
+const BOUND = 8;
+
+let global_coded;
+
+function tune(contexts,lzrangeormixfree,minmatch,maxmatch,minentropy){
+	let image_width = green_channel[0].length;
+	let image_height = green_channel.length;
+	let tile_width = Math.ceil(image_width/BOUND);
+	let tile_height = Math.ceil(image_height/BOUND);
+	let tile_number = tile_width * tile_height;
+
+	let tile_predictors = new Array(tile_number).fill(0);
+	let tile_entropy = new Array(tile_number).fill(0);
+	let predictBlock = function(predictor,tile_index){
+		let collected = [];
+		for(let y=0;y<BOUND;y++){
+			let pixel_y = Math.floor(tile_index / tile_width) * BOUND + y;
+			if(pixel_y >= image_height){
+				continue
+			}
+			for(let x=0;x<BOUND;x++){
+				let pixel_x = (tile_index % tile_width) * BOUND + x;
+				if(pixel_x >= image_width){
+					continue
+				}
+				let VAL = green_channel[
+					pixel_y
+				][
+					pixel_x
+				];
+				let L;
+				let LL;
+				let TL;
+				let T;
+				let TR;
+				if(pixel_y === 0){
+					TL = 128;
+					T = 128;
+					TR = 128;
+					if(pixel_x === 0){
+						L = 128;
+						LL = 128;
+					}
+					else{
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
+						L = green_channel[pixel_y][pixel_x - 1]
+					}
+				}
+				else{
+					T = green_channel[pixel_y - 1][pixel_x];
+					if(pixel_x === 0){
+						L = 128;
+						LL = 128;
+						TR = green_channel[pixel_y - 1][pixel_x + 1];
+						TL = 128;
+					}
+					else if(pixel_x === image_width - 1){
+						L = green_channel[pixel_y][pixel_x - 1];
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
+						TR = 128;
+						TL = green_channel[pixel_y - 1][pixel_x - 1];
+					}
+					else{
+						L = green_channel[pixel_y][pixel_x - 1];
+						if(pixel_x === 1){
+							LL = 128;
+						}
+						else{
+							LL = green_channel[pixel_y][pixel_x - 2]
+						}
+						TR = green_channel[pixel_y - 1][pixel_x + 1];
+						TL = green_channel[pixel_y - 1][pixel_x - 1];
+					}
+				}
+				collected.push((VAL - predictors[predictor].predict(L,TL,T,TR,LL) + 256) % 256)
+			}
+		}
+		return collected
+	}
+
+	let coded = tile_predictors.map((predictor,index) => predictBlock(predictor,index));
+
+	let entropy = estimateEntropy(coded.flat());
+	console.log(entropy/8,"initial");
+	let global_table = freqs(coded.flat());
+	{
+		let heatMap = coded.map(misses => local_estimateEntropy_exclusive(global_table,misses));
+		let medianSplitter = Stats.median(heatMap);
+		let groups = [[],[]];
+		coded.forEach((cell,index) => {
+			if(heatMap[index] < medianSplitter){
+				groups[0].push(cell)
+			}
+			else{
+				groups[1].push(cell)
+			}
+		});
+		let entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+		console.log((entropy)/8,"secondary",groups.map(val => val.length));
+		console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)))/8,"implied overhead + " + groups.length + " frequency tables");
+
+		let frequencies = groups.map(group => freqs(group.flat()));
+
+		let coded2;
+		let predictorCounts;
+
+		for(let iterations=0;iterations < contexts + 3;){
+			iterations++;
+			console.log("iter:",iterations);
+			console.log("aaa");
+			let new_tiles = [];
+			if(iterations===1 || iterations === contexts + 3){
+				tile_predictors.forEach((tile,index) => {
+					let predictor_results = groups.map((group,gIndex) =>
+						predictors.map((predictor,pIndex) => 
+							local_estimateEntropy_inclusive(
+								frequencies[gIndex],
+								predictBlock(pIndex,index),
+							)
+						)
+					)
+					let bests = predictor_results.map(result => Math.min(...result));
+					let best_best = Math.min(...bests);
+					let best_best_index = bests.indexOf(best_best);
+					new_tiles.push(predictor_results[best_best_index].indexOf(best_best))
+				});
+
+				console.log("bbb");
+
+				coded2 = new_tiles.map((predictor,index) => 
+					predictBlock(predictor,index)
+				);
+			}
+
+			console.log("ccc");
+
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				groups[estimates.indexOf(Math.min(...estimates))].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			if(groups.length < contexts){
+				let lengths = groups.map(a => a.length);
+
+				let largestIndex = lengths.indexOf(Math.max(...lengths));
+				let largest = groups.splice(largestIndex,1)[0];
+
+				heatMap = largest.map(misses => local_estimateEntropy_exclusive(frequencies[largestIndex],misses));
+				medianSplitter = Stats.median(heatMap);
+				let group_lower = [];
+				let group_upper = [];
+				largest.forEach((cell,index) => {
+					if(heatMap[index] < medianSplitter){
+						group_lower.push(cell)
+					}
+					else{
+						group_upper.push(cell)
+					}
+				});
+
+				if(group_lower.length){
+					groups.push(group_lower)
+				}
+				if(group_upper.length){
+					groups.push(group_upper)
+				}
+				frequencies = groups.map(group => freqs(group.flat()));
+			}
+
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			if(iterations === 1 || iterations === contexts + 3){
+				tile_predictors = new_tiles;
+				predictorCounts = new Array(predictors.length).fill(0);
+				tile_predictors.forEach(predictor => {
+					predictorCounts[predictor]++
+				})
+			}
+			console.log(entropy/8,"secondary with search",groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
+		for(let i=0;i<5;i++){
+			groups = groups.map(_ => []);
+			coded2.forEach((cell,index) => {
+				let estimates = frequencies.map(frequency => local_estimateEntropy_inclusive(frequency,cell));
+				let group_index = estimates.indexOf(Math.min(...estimates));
+				tile_entropy[index] = group_index;
+				groups[group_index].push(cell)
+			});
+			groups = groups.filter(group => group.length);
+
+			frequencies = groups.map(group => freqs(group.flat()));
+			entropy = groups.reduce((acc,val) => acc + estimateEntropy(val.flat()),0);
+			console.log(entropy/8,"secondary, adjustment" + 1,groups.map(val => val.length));
+			console.log((tile_number * 1/3 + estimateEntropy_freqs(groups.map(val => val.length)) + estimateEntropy_freqs(predictorCounts))/8,"implied overhead + " + groups.length + " frequency tables");
+		}
+		let predMap_cost = Math.ceil(estimateEntropy_freqs(predictorCounts)/8);
+		let entrMap_cost = Math.ceil(estimateEntropy_freqs(groups.map(group => group.length))/8);
+		let table_cost = frequencies.reduce((acc,val) => acc + estimate_table_size(val),0);
+		console.log("overhead",predMap_cost,entrMap_cost,table_cost);
+		console.log("total",Math.ceil(entropy/8 + predMap_cost + entrMap_cost + table_cost));
+		let predCountish = predictorCounts.reduce((acc,val) => acc + val,0);
+		console.log("predictors",predictorCounts.map((count,index) => [count,(predictors[index] || {name: "mixer"}).name]).sort((b,a) => a[0] - b[0]).map(lava => lava[0] + " " + lava[1] + " " + Math.round(100*lava[0]/predCountish) + "%"));
+		drawEntropyMap(tile_entropy.map(val => Math.floor(255 * val/(groups.length - 1))),tile_width,tile_height)
+		drawPredictorMap(tile_predictors.map(val => Math.floor(255 * val/(predictors.length - 1))),tile_width,tile_height)
+	}
+}
+
+
+const inputElementEncode = document.getElementById("imageInput");
+const buttonElementEncode = document.getElementById("encodeButton");
+
+let html_encode = function(){
+	if(inputElementEncode.files && inputElementEncode.files[0]){
+		let fileName = inputElementEncode.files[0].name;
+		let FR = new FileReader();
+		FR.onload = function(e){
+			let img = new Image();
+			img.addEventListener("load", function(){
+				let canvas = document.getElementById("preview");
+				canvas.height = img.height;
+				canvas.width = img.width;
+				let ctx = canvas.getContext("2d");
+				ctx.drawImage(img, 0, 0);
+				let contextData = ctx.getImageData(0,0,img.width,img.height).data;
+
+				let sub_green_data = rgba_to_subgreena(contextData);
+				green_channel = deMultiplexChannels(sub_green_data,img.width,img.height)[0];
+				drawGreyscale(green_channel,img.width,img.height);
+			});
+			img.src = e.target.result;
+		};
+		FR.readAsDataURL(inputElementEncode.files[0]);
+	}
+}
+inputElementEncode.addEventListener("change",html_encode,false);
+buttonElementEncode.addEventListener("click",html_encode,false);
+		</script>
+	</body>
+</html>
